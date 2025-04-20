@@ -10,10 +10,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 use std::{
-    fs::File,
-    io::{stdout, BufRead, BufReader, Stdout},
-    path::PathBuf,
-    time::Duration,
+    collections::{HashMap, HashSet}, fs::File, io::{stdout, BufRead, BufReader, Stdout}, path::PathBuf, time::Duration
 };
 use syntect::{
     easy::HighlightLines,
@@ -32,6 +29,8 @@ struct Args {
 struct AppState {
     file_path: PathBuf,
     lines: Vec<String>,
+    error_lines: HashSet<usize>, // 1-indexed line number of lines with errors
+    fix_lines: HashMap<usize, Option<String>>, // 1-indexed line number to fix (None means there should be a fix, but none was provided)
     current_line: usize,  // 0-indexed line number currently selected/focused
     scroll_offset: usize, // 0-indexed line number at the top of the viewport
     should_quit: bool,
@@ -40,7 +39,7 @@ struct AppState {
 }
 
 impl AppState {
-    fn new(file_path: PathBuf) -> Result<Self> {
+    fn new(file_path: PathBuf, error_lines: HashSet<usize>) -> Result<Self> {
         let file = File::open(&file_path)
             .with_context(|| format!("Failed to open file: {:?}", file_path))?;
         let reader = BufReader::new(file);
@@ -55,6 +54,8 @@ impl AppState {
         Ok(AppState {
             file_path,
             lines,
+            error_lines,
+            fix_lines: HashMap::new(),
             current_line: 0,
             scroll_offset: 0,
             should_quit: false,
@@ -106,7 +107,7 @@ fn main() -> Result<()> {
     terminal.clear()?;
 
     // Create app state
-    let mut app_state = AppState::new(args.file_path)?;
+    let mut app_state = AppState::new(args.file_path, vec![5].into_iter().collect())?;
 
     // Run the app loop
     run_app(&mut terminal, &mut app_state)?;
@@ -203,6 +204,7 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
 
     // Define the highlight color (consider deriving from theme later)
     let highlight_bg = Color::Rgb(35, 38, 46); // A slightly different dark background
+    let fix_line_bg = Color::Rgb(70, 38, 46);  // A slightly red background
 
     // Extract the theme's background color
     let theme_bg = app_state.theme.settings.background.map_or(
@@ -216,7 +218,7 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
         .enumerate()
     {
         // HACK: pad the line to the viewport width to ensure that it's highlighted. Not sure why we need to do this.
-        let padded_line_content = format!("{:<width$}", line_content, width = display_width);
+        // let padded_line_content = format!("{:<width$}", line_content, width = display_width);
         let line_idx = app_state.scroll_offset + i;
         let is_current_line = line_idx == app_state.current_line;
 
@@ -235,22 +237,33 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
 
         // 2. Create Content Spans (Apply highlight BG if needed)
         let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter
-            .highlight_line(&padded_line_content, &app_state.syntax_set)
-            .unwrap_or_else(|_| vec![(Default::default(), &padded_line_content)]);
+            .highlight_line(line_content, &app_state.syntax_set)
+            .unwrap_or_else(|_| vec![(Default::default(), line_content)]);
 
         let content_spans: Vec<Span> = ranges
             .into_iter()
             .filter_map(|(syntect_style, content)| {
                 // Convert syntect style to ratatui style
-                let ratatui_style = syntect_tui::translate_style(syntect_style).ok()?;
+                let mut ratatui_style = syntect_tui::translate_style(syntect_style).ok()?;
+                if app_state.error_lines.contains(&line_num) {
+                    ratatui_style = ratatui_style.underlined().underline_color(Color::Red);
+                }
+
+                if app_state.fix_lines.contains_key(&line_num) {
+                    ratatui_style = ratatui_style.bg(fix_line_bg);
+                }
 
                 Some(Span::styled(content.to_string(), ratatui_style.bg(line_bg)))
             })
             .collect();
 
+        let line_content_padding = display_width.saturating_sub(line_content.chars().count());
+        let padding_span = Span::styled(" ".repeat(line_content_padding), Style::default().bg(line_bg));
+
         // 3. Combine Spans into a Line
         let mut all_spans = vec![line_num_span];
         all_spans.extend(content_spans);
+        all_spans.push(padding_span);
         let line = Line::from(all_spans);
 
         text_lines.push(line);
