@@ -19,9 +19,7 @@ use syntect::{
     easy::HighlightLines,
     highlighting::{Theme, ThemeSet},
     parsing::SyntaxSet,
-    util::LinesWithEndings,
 };
-use syntect_tui::into_span; // Use the syntect_tui bridge
 
 /// Simple File Viewer with Syntax Highlighting
 #[derive(Parser, Debug)]
@@ -34,7 +32,7 @@ struct Args {
 struct AppState {
     file_path: PathBuf,
     lines: Vec<String>,
-    current_line: usize, // 0-indexed line number currently selected/focused
+    current_line: usize,  // 0-indexed line number currently selected/focused
     scroll_offset: usize, // 0-indexed line number at the top of the viewport
     should_quit: bool,
     syntax_set: SyntaxSet,
@@ -88,7 +86,7 @@ impl AppState {
         }
         // Scroll down if current_line is below the viewport
         else if self.current_line >= self.scroll_offset + vp_height {
-             // Adjust so the current line is the last line in the viewport
+            // Adjust so the current line is the last line in the viewport
             self.scroll_offset = self.current_line - vp_height + 1;
         }
 
@@ -131,7 +129,6 @@ fn run_app(
         let content_height = viewport_height.saturating_sub(2);
         app_state.adjust_scroll(content_height);
 
-
         terminal.draw(|frame| ui(frame, app_state))?;
 
         // Poll for events with a timeout
@@ -149,19 +146,21 @@ fn run_app(
                             app_state.scroll_offset = app_state.scroll_offset.saturating_sub(jump);
                         }
                         KeyCode::PageDown | KeyCode::Char('d') => {
-                           let jump = content_height.saturating_sub(1);
+                            let jump = content_height.saturating_sub(1);
                             app_state.current_line = app_state.current_line.saturating_add(jump);
                             app_state.scroll_offset = app_state.scroll_offset.saturating_add(jump);
                             // Ensure we don't go past the end
-                            app_state.current_line = app_state.current_line.min(app_state.lines.len().saturating_sub(1));
+                            app_state.current_line = app_state
+                                .current_line
+                                .min(app_state.lines.len().saturating_sub(1));
                             // scroll offset is handled in the adjust_scroll hook
                         }
-                         KeyCode::Home => {
+                        KeyCode::Home => {
                             app_state.current_line = 0;
-                         }
-                         KeyCode::End => {
+                        }
+                        KeyCode::End => {
                             app_state.current_line = app_state.lines.len().saturating_sub(1);
-                         }
+                        }
                         _ => {} // Ignore other keys
                     }
                 }
@@ -182,9 +181,15 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
     let syntax = app_state
         .syntax_set
         .find_syntax_by_path(app_state.file_path.to_str().unwrap_or(""))
-        .or_else(|| app_state.syntax_set.find_syntax_by_extension(
-            app_state.file_path.extension().and_then(|s| s.to_str()).unwrap_or(""),
-        ))
+        .or_else(|| {
+            app_state.syntax_set.find_syntax_by_extension(
+                app_state
+                    .file_path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(""),
+            )
+        })
         .unwrap_or_else(|| app_state.syntax_set.find_syntax_plain_text());
 
     let mut highlighter = HighlightLines::new(syntax, &app_state.theme);
@@ -205,7 +210,8 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
         |bg| Color::Rgb(bg.r, bg.g, bg.b),
     );
 
-    for (i, line_content) in app_state.lines[app_state.scroll_offset..app_state.scroll_offset + display_height]
+    for (i, line_content) in app_state.lines
+        [app_state.scroll_offset..app_state.scroll_offset + display_height]
         .iter()
         .enumerate()
     {
@@ -213,25 +219,25 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
         let padded_line_content = format!("{:<width$}", line_content, width = display_width);
         let line_idx = app_state.scroll_offset + i;
         let is_current_line = line_idx == app_state.current_line;
-    
+
         // 1. Create Line Number Span (Apply highlight BG if needed)
-        let line_num = if line_idx >= app_state.scroll_offset + display_height {
-            999
-        } else {
-            line_idx + 1
-        };
+        let line_num = line_idx + 1;
         let line_num_style = Style::default().fg(Color::DarkGray).bg(theme_bg);
-        let line_bg = if is_current_line { highlight_bg } else { theme_bg };
+        let line_bg = if is_current_line {
+            highlight_bg
+        } else {
+            theme_bg
+        };
         let line_num_span = Span::styled(
             format!("{:>width$} ", line_num, width = line_number_width as usize),
             line_num_style,
         );
-    
+
         // 2. Create Content Spans (Apply highlight BG if needed)
         let ranges: Vec<(syntect::highlighting::Style, &str)> = highlighter
             .highlight_line(&padded_line_content, &app_state.syntax_set)
             .unwrap_or_else(|_| vec![(Default::default(), &padded_line_content)]);
-    
+
         let content_spans: Vec<Span> = ranges
             .into_iter()
             .filter_map(|(syntect_style, content)| {
@@ -241,21 +247,25 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
                 Some(Span::styled(content.to_string(), ratatui_style.bg(line_bg)))
             })
             .collect();
-    
+
         // 3. Combine Spans into a Line
         let mut all_spans = vec![line_num_span];
         all_spans.extend(content_spans);
         let line = Line::from(all_spans);
-    
+
         text_lines.push(line);
     }
-    
+
     // --- Create Widgets ---
     let block = Block::default()
         .borders(Borders::ALL)
         .title(format!(
             " File: {} (Line {}/{}) (Scroll offset {})",
-            app_state.file_path.file_name().unwrap_or_default().to_string_lossy(),
+            app_state
+                .file_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy(),
             app_state.current_line + 1, // Display 1-based line number
             app_state.lines.len(),
             app_state.scroll_offset,
