@@ -1,0 +1,12 @@
+[package]
+name = "flux-diagnose-tui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.98"
+clap = {version = "4.5.37", features = ["derive"]}
+crossterm = "0.29.0"
+ratatui = {version = "0.29.0", features = ["crossterm"]}
+syntect = "5.2.0"
+syntect-tui = "3.0.5"
