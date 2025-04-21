@@ -46,7 +46,7 @@ struct AppState {
     file_path: PathBuf,
     lines: Vec<String>,
     error_lines: HashSet<usize>,        // 1-indexed line number of lines with errors
-    fix_lines: HashMap<usize, String>, // 1-indexed line number to fix text (empty string means cleared/no fix)
+    fix_lines: HashMap<usize, Option<String>>, // 1-indexed line number to fix text (None means there is a fix but isn't provided)
     current_line: usize,               // 0-indexed line number currently selected/focused
     scroll_offset: usize,              // 0-indexed line number at the top of the viewport
     should_quit: bool,
@@ -113,7 +113,7 @@ impl AppState {
     fn enter_edit_mode(&mut self) {
         let line_to_edit = self.current_line + 1; // Store 1-based index
         self.editing_line = Some(line_to_edit);
-        let current_fix = self.fix_lines.get(&line_to_edit).cloned().unwrap_or_default();
+        let current_fix = self.fix_lines.get(&line_to_edit).cloned().unwrap_or_default().unwrap_or_else(||"".to_string());
         self.input = Input::new(current_fix); // Use ::new to set initial value
         self.mode = AppMode::EditingFix;
     }
@@ -123,10 +123,9 @@ impl AppState {
             if save {
                 let fix_text = self.input.value().to_string();
                 if fix_text.is_empty() {
-                    // If empty, treat as cleared, remove the entry
-                    self.fix_lines.remove(&line_num);
+                    self.fix_lines.insert(line_num, None);
                 } else {
-                    self.fix_lines.insert(line_num, fix_text);
+                    self.fix_lines.insert(line_num, Some(fix_text));
                 }
             }
         }
@@ -188,7 +187,7 @@ fn main() -> Result<()> {
         let mut sorted_fixes: Vec<_> = app_state.fix_lines.iter().collect();
         sorted_fixes.sort_by_key(|(k, _)| *k);
         for (line_num, fix) in sorted_fixes {
-            println!("Line {}: {}", line_num, fix);
+            println!("Line {}: {:?}", line_num, fix);
         }
     }
 
