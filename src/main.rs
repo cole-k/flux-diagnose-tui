@@ -41,6 +41,7 @@ enum AppMode {
     Browsing,
     EditingFix,
     GoToLine,
+    AddNote,
     FileExplorer,
     ConfirmationDialog,
 }
@@ -95,6 +96,7 @@ struct AppState {
     lines: Vec<String>,
     error_lines: HashSet<LineLoc>,        // 1-indexed line number of lines with errors
     fix_lines: BTreeMap<LineLoc, Option<String>>, // 1-indexed line number to fix text (None means there is a fix but isn't provided)
+    note: Option<String>,
     current_line: usize,               // 0-indexed line number currently selected/focused
     scroll_offset: usize,              // 0-indexed line number at the top of the viewport
     exit_intent: Option<ExitIntent>,
@@ -129,6 +131,7 @@ impl AppState {
             lines,
             error_lines,
             fix_lines: BTreeMap::new(),
+            note: None,
             current_line: 0,
             scroll_offset: 0,
             exit_intent: None,
@@ -206,6 +209,27 @@ impl AppState {
         }
         self.input.reset();
         self.mode = AppMode::Browsing;
+    }
+
+    fn exit_add_note_mode(&mut self, save_note: bool) {
+        if save_note && !self.input.value().is_empty() {
+            self.note = Some(self.input.value().to_string());
+        } else {
+            self.note = None;
+        }
+        self.initiate_save_and_next();
+    }
+
+    fn initiate_save_and_next(&mut self) {
+        let (confirmation_title, confirmation_message) = make_confirmation_message(&self.fix_lines);
+        self.request_confirmation(confirmation_title, confirmation_message, AppMode::Browsing, |app_state, confirmed| {
+            if confirmed {
+                app_state.exit_intent = Some(ExitIntent::SaveAndRedo);
+            } else {
+                app_state.exit_intent = Some(ExitIntent::SaveAndNext);
+            }
+            Ok(())
+        })
     }
 
     fn clear_fix(&mut self) {
@@ -354,6 +378,7 @@ fn run_app(
             AppMode::GoToLine => handle_gotoline_input(event, app_state)?,
             AppMode::FileExplorer => handle_file_explorer_input(event, app_state)?,
             AppMode::ConfirmationDialog => handle_confirmation_dialog_input(event, app_state)?,
+            AppMode::AddNote => handle_add_note_input(event, app_state)?,
         }
 
         if app_state.exit_intent.is_some() {
@@ -384,15 +409,7 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
                     })
                 },
                 KeyCode::Char('z') | KeyCode::Char('n') => {
-                    let (confirmation_title, confirmation_message) = make_confirmation_message(&app_state.fix_lines);
-                    app_state.request_confirmation(confirmation_title, confirmation_message, AppMode::Browsing, |app_state, confirmed| {
-                        if confirmed {
-                            app_state.exit_intent = Some(ExitIntent::SaveAndRedo);
-                        } else {
-                            app_state.exit_intent = Some(ExitIntent::SaveAndNext);
-                        }
-                        Ok(())
-                    })
+                    app_state.mode = AppMode::AddNote;
                 },
                 // Navigation
                 KeyCode::Up | KeyCode::Char('k') => app_state.move_up(),
@@ -474,6 +491,24 @@ fn handle_gotoline_input(event: Event, app_state: &mut AppState) -> Result<()> {
      Ok(())
 }
 
+fn handle_add_note_input(event: Event, app_state: &mut AppState) -> Result<()> {
+     if let Event::Key(key) = event {
+         match key.code {
+             KeyCode::Enter => {
+                 app_state.exit_add_note_mode(true); // Save on Enter
+             }
+             KeyCode::Esc => {
+                 app_state.exit_add_note_mode(false); // Cancel on Esc
+             }
+             _ => {
+                 // Pass the event to tui-input
+                 app_state.input.handle_event(&event);
+             }
+         }
+     }
+     Ok(())
+}
+
 fn handle_file_explorer_input(event: Event, app_state: &mut AppState) -> Result<()> {
     if let Event::Key(key) = event {
         match key.code {
@@ -535,11 +570,15 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
         AppMode::EditingFix => {
             let line_num = app_state.editing_line.unwrap_or(0); // Should always be Some in EditingFix mode
             let title = format!("Enter fix for Line {}:", line_num);
-            render_input_dialog(frame, title, app_state, theme_bg);
+            render_input_dialog(frame, title, 1, app_state, theme_bg);
         }
         AppMode::GoToLine => {
             let title = "Jump to line:".to_string();
-            render_input_dialog(frame, title, app_state, theme_bg);
+            render_input_dialog(frame, title, 1, app_state, theme_bg);
+        }
+        AppMode::AddNote => {
+            let title = "Add any notes:".to_string();
+            render_input_dialog(frame, title, 3, app_state, theme_bg);
         }
         AppMode::FileExplorer => {
             render_file_explorer(frame, app_state);
@@ -766,15 +805,16 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
     }
 }
 
-fn render_input_dialog(frame: &mut Frame, title: String, app_state: &AppState, _theme_bg: Color) {
+fn render_input_dialog(frame: &mut Frame, title: String, height: u16, app_state: &AppState, _theme_bg: Color) {
     let input_width = 60; // Desired width of the input box
-    let input_height = 3;  // Height (1 for border, 1 for text, 1 for border)
+    let input_height = height + 2;  // Height (1 for border, 1 for border)
 
     let area = frame.area();
     let popup_area = centered_rect_abs(input_width, input_height, area);
 
     let input_widget = Paragraph::new(app_state.input.value())
         .style(Style::default())
+        .wrap(Wrap { trim: false })
         .block(
             Block::default()
                 .borders(Borders::ALL)
