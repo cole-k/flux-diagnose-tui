@@ -270,6 +270,9 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
                 KeyCode::Char('g') => {
                     app_state.mode = AppMode::GoToLine;
                 }
+                KeyCode::Char('h') => {
+                    app_state.show_full_error = !app_state.show_full_error;
+                }
                 _ => {} // Ignore other keys in browsing mode
             }
         }
