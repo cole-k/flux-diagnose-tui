@@ -11,7 +11,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     fs::File,
     io::{stdout, BufRead, BufReader, Stdout},
     path::PathBuf,
@@ -40,13 +40,26 @@ enum AppMode {
     GoToLine,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct LineLoc {
+    /// 1-indexed
+    line: usize,
+    file: PathBuf,
+}
+
+impl LineLoc {
+    fn new(line: usize, file: PathBuf) -> Self {
+        Self { line, file }
+    }
+}
+
 struct AppState {
     error_message: String,
     show_full_error: bool,
-    file_path: PathBuf,
+    current_file_path: PathBuf,
     lines: Vec<String>,
-    error_lines: HashSet<usize>,        // 1-indexed line number of lines with errors
-    fix_lines: HashMap<usize, Option<String>>, // 1-indexed line number to fix text (None means there is a fix but isn't provided)
+    error_lines: HashSet<LineLoc>,        // 1-indexed line number of lines with errors
+    fix_lines: BTreeMap<LineLoc, Option<String>>, // 1-indexed line number to fix text (None means there is a fix but isn't provided)
     current_line: usize,               // 0-indexed line number currently selected/focused
     scroll_offset: usize,              // 0-indexed line number at the top of the viewport
     should_quit: bool,
@@ -58,7 +71,7 @@ struct AppState {
 }
 
 impl AppState {
-    fn new(file_path: PathBuf, error_message: String, error_lines: HashSet<usize>) -> Result<Self> {
+    fn new(file_path: PathBuf, error_message: String, error_lines: HashSet<LineLoc>) -> Result<Self> {
         let file = File::open(&file_path)
             .with_context(|| format!("Failed to open file: {:?}", file_path))?;
         let reader = BufReader::new(file);
@@ -72,10 +85,10 @@ impl AppState {
         Ok(AppState {
             error_message,
             show_full_error: true,
-            file_path,
+            current_file_path: file_path,
             lines,
             error_lines,
-            fix_lines: HashMap::new(),
+            fix_lines: BTreeMap::new(),
             current_line: 0,
             scroll_offset: 0,
             should_quit: false,
@@ -112,20 +125,22 @@ impl AppState {
 
     fn enter_edit_mode(&mut self) {
         let line_to_edit = self.current_line + 1; // Store 1-based index
+        let line_loc = LineLoc::new(line_to_edit, self.current_file_path.clone());
         self.editing_line = Some(line_to_edit);
-        let current_fix = self.fix_lines.get(&line_to_edit).cloned().unwrap_or_default().unwrap_or_else(||"".to_string());
+        let current_fix = self.fix_lines.get(&line_loc).cloned().unwrap_or_default().unwrap_or_else(||"".to_string());
         self.input = Input::new(current_fix); // Use ::new to set initial value
         self.mode = AppMode::EditingFix;
     }
 
     fn exit_edit_mode(&mut self, save: bool) {
         if let Some(line_num) = self.editing_line {
+            let line_loc = LineLoc::new(line_num, self.current_file_path.clone());
             if save {
                 let fix_text = self.input.value().to_string();
                 if fix_text.is_empty() {
-                    self.fix_lines.insert(line_num, None);
+                    self.fix_lines.insert(line_loc, None);
                 } else {
-                    self.fix_lines.insert(line_num, Some(fix_text));
+                    self.fix_lines.insert(line_loc, Some(fix_text));
                 }
             }
         }
@@ -153,7 +168,8 @@ impl AppState {
 
     fn clear_fix(&mut self) {
         let line_to_clear = self.current_line + 1;
-        self.fix_lines.remove(&line_to_clear);
+        let line_loc = LineLoc::new(line_to_clear, self.current_file_path.clone());
+        self.fix_lines.remove(&line_loc);
     }
 }
 
@@ -166,7 +182,8 @@ fn main() -> Result<()> {
     terminal.clear()?;
 
     // Example: Mark line 5 as having an error
-    let error_lines: HashSet<usize> = vec![5].into_iter().collect();
+    let line_loc = LineLoc::new(5, args.file_path.clone());
+    let error_lines: HashSet<_> = vec![line_loc].into_iter().collect();
     let error_message = r#"warning: function `centered_rect` is never used
    --> src/main.rs:430:4
     |
@@ -186,8 +203,8 @@ fn main() -> Result<()> {
         println!("Fixes proposed:");
         let mut sorted_fixes: Vec<_> = app_state.fix_lines.iter().collect();
         sorted_fixes.sort_by_key(|(k, _)| *k);
-        for (line_num, fix) in sorted_fixes {
-            println!("Line {}: {:?}", line_num, fix);
+        for (line_loc, fix) in sorted_fixes {
+            println!("{:?}: {:?}", line_loc, fix);
         }
     }
 
@@ -342,11 +359,11 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
     // --- Syntax Highlighting Setup ---
     let syntax = app_state
         .syntax_set
-        .find_syntax_by_path(app_state.file_path.to_str().unwrap_or(""))
+        .find_syntax_by_path(app_state.current_file_path.to_str().unwrap_or(""))
         .or_else(|| {
             app_state.syntax_set.find_syntax_by_extension(
                 app_state
-                    .file_path
+                    .current_file_path
                     .extension()
                     .and_then(|s| s.to_str())
                     .unwrap_or(""),
@@ -373,8 +390,9 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
 
     for (line_idx, line_content) in visible_lines {
         let line_num = line_idx + 1; // 1-based for display and map keys
+        let line_loc = LineLoc::new(line_num, app_state.current_file_path.clone());
         let is_current_line = line_idx == app_state.current_line;
-        let has_fix = app_state.fix_lines.contains_key(&line_num);
+        let has_fix = app_state.fix_lines.contains_key(&line_loc);
 
         // Determine line background
         let mut line_bg = if is_current_line { highlight_bg } else { theme_bg };
@@ -402,7 +420,7 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
             .into_iter()
             .filter_map(|(syntect_style, content)| {
                 let mut ratatui_style = syntect_tui::translate_style(syntect_style).ok()?;
-                if app_state.error_lines.contains(&line_num) {
+                if app_state.error_lines.contains(&line_loc) {
                     ratatui_style = ratatui_style.add_modifier(Modifier::UNDERLINED).underline_color(Color::Red);
                 }
                 // Apply line_bg to all content spans
@@ -437,7 +455,7 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
     // --- Create Main Widget ---
     let title = format!(
         " File: {} | Line {}/{} | Scroll {} | Mode: {:?} ",
-        app_state.file_path.file_name().unwrap_or_default().to_string_lossy(),
+        app_state.current_file_path.file_name().unwrap_or_default().to_string_lossy(),
         app_state.current_line + 1,
         app_state.lines.len(),
         app_state.scroll_offset,
