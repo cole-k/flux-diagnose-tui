@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind}, // Added KeyEvent
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers}, // Added KeyEvent
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
@@ -23,6 +23,7 @@ use syntect::{
     parsing::SyntaxSet,
 };
 use tui_input::{backend::crossterm::EventHandler, Input}; // Added tui-input
+use ratatui_explorer::FileExplorer;
 
 /// Simple File Viewer with Syntax Highlighting and Fix Input
 #[derive(Parser, Debug)]
@@ -38,6 +39,7 @@ enum AppMode {
     Browsing,
     EditingFix,
     GoToLine,
+    FileExplorer,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -56,6 +58,7 @@ impl LineLoc {
 struct AppState {
     error_message: String,
     show_full_error: bool,
+    // FIXME: need to canonicalize file paths w.r.t project root
     current_file_path: PathBuf,
     lines: Vec<String>,
     error_lines: HashSet<LineLoc>,        // 1-indexed line number of lines with errors
@@ -68,6 +71,7 @@ struct AppState {
     mode: AppMode,          // Current application mode
     input: Input,           // Input field state for tui-input
     editing_line: Option<usize>, // Track which line (1-based) is being edited
+    file_explorer: FileExplorer,
 }
 
 impl AppState {
@@ -81,6 +85,8 @@ impl AppState {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
         let theme = theme_set.themes["base16-ocean.dark"].clone();
+        let file_explorer_theme = ratatui_explorer::Theme::default().add_default_title();
+        let file_explorer = FileExplorer::with_theme(file_explorer_theme)?;
 
         Ok(AppState {
             error_message,
@@ -97,6 +103,7 @@ impl AppState {
             mode: AppMode::Browsing,
             input: Input::default(),
             editing_line: None,
+            file_explorer,
         })
     }
 
@@ -156,8 +163,8 @@ impl AppState {
         self.scroll_offset = self.current_line.saturating_sub(relative_pos);
     }
 
-    fn exit_gotoline_mode(&mut self, save: bool) {
-        if save {
+    fn exit_gotoline_mode(&mut self, go: bool) {
+        if go {
             if let Ok(line_no) = self.input.value().parse::<usize>() {
                 self.go_to_line(line_no);
             }
@@ -170,6 +177,19 @@ impl AppState {
         let line_to_clear = self.current_line + 1;
         let line_loc = LineLoc::new(line_to_clear, self.current_file_path.clone());
         self.fix_lines.remove(&line_loc);
+    }
+
+    fn exit_file_explorer_mode(&mut self, go: bool) -> Result<()> {
+        let selected_file = self.file_explorer.current();
+        if go && !selected_file.is_dir() {
+            self.current_file_path = selected_file.path().clone();
+            let file = File::open(&self.current_file_path)
+                .with_context(|| format!("Failed to open file: {:?}", self.current_file_path))?;
+            let reader = BufReader::new(file);
+            self.lines = reader.lines().collect::<Result<_, _>>()?;
+        }
+        self.mode = AppMode::Browsing;
+        Ok(())
     }
 }
 
@@ -232,16 +252,16 @@ fn run_app(
 
         // Global quit shortcut
         if let Event::Key(key) = event {
-             if key.kind == KeyEventKind::Press && (key.code == KeyCode::Char('q') && app_state.mode == AppMode::Browsing || key.code == KeyCode::Esc && app_state.mode == AppMode::Browsing) {
+             if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                  app_state.should_quit = true;
              }
         }
-
 
         match app_state.mode {
             AppMode::Browsing => handle_browsing_input(event, app_state, content_height)?,
             AppMode::EditingFix => handle_editing_input(event, app_state)?,
             AppMode::GoToLine => handle_gotoline_input(event, app_state)?,
+            AppMode::FileExplorer => handle_file_explorer_input(event, app_state)?,
         }
 
         if app_state.should_quit {
@@ -255,6 +275,7 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
     if let Event::Key(key) = event {
         if key.kind == KeyEventKind::Press {
             match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => app_state.should_quit = true,
                 // Navigation
                 KeyCode::Up | KeyCode::Char('k') => app_state.move_up(),
                 KeyCode::Down | KeyCode::Char('j') => app_state.move_down(),
@@ -285,6 +306,9 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
                 }
                 KeyCode::Char('g') => {
                     app_state.mode = AppMode::GoToLine;
+                }
+                KeyCode::Char('f') => {
+                    app_state.mode = AppMode::FileExplorer;
                 }
                 KeyCode::Char('h') => {
                     app_state.show_full_error = !app_state.show_full_error;
@@ -332,6 +356,29 @@ fn handle_gotoline_input(event: Event, app_state: &mut AppState) -> Result<()> {
      Ok(())
 }
 
+fn handle_file_explorer_input(event: Event, app_state: &mut AppState) -> Result<()> {
+    if let Event::Key(key) = event {
+        match key.code {
+            // Enter on directories visits them
+            KeyCode::Enter if app_state.file_explorer.current().is_dir() => {
+                app_state.file_explorer.handle(ratatui_explorer::Input::Right)?;
+            }
+            // Enter on files exits the explorer
+            KeyCode::Enter => {
+                app_state.exit_file_explorer_mode(true)?;
+            }
+            KeyCode::Esc | KeyCode::Char('q') => {
+                app_state.exit_file_explorer_mode(false)?;
+            }
+            _ => {
+                app_state.file_explorer.handle(&event)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+
 
 fn ui(frame: &mut Frame, app_state: &AppState) {
     let area = frame.area();
@@ -340,7 +387,7 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
     // --- Main File View ---
     render_file_view(frame, app_state, area, theme_bg);
 
-    // --- Input Dialog (if active) ---
+    // --- Other dialogs ---
     match app_state.mode {
         AppMode::EditingFix => {
             let line_num = app_state.editing_line.unwrap_or(0); // Should always be Some in EditingFix mode
@@ -350,6 +397,9 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
         AppMode::GoToLine => {
             let title = "Jump to line:".to_string();
             render_input_dialog(frame, title, app_state, theme_bg);
+        }
+        AppMode::FileExplorer => {
+            render_file_explorer(frame, app_state);
         }
         _ => {}
     }
@@ -478,8 +528,8 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
     if !app_state.error_message.is_empty() && area.width > 0 && area.height > 0 {
         let error_text_raw = &app_state.error_message;
         let mut popup_content_lines: Vec<String> = Vec::new();
-        let mut popup_width: usize = 0;
-        let mut popup_height: usize = 0;
+        let popup_width: usize;
+        let popup_height: usize;
 
         // Calculate the content, required width, and height based on the mode
         if app_state.show_full_error {
@@ -598,8 +648,13 @@ fn render_input_dialog(frame: &mut Frame, title: String, app_state: &AppState, _
     );
 }
 
+fn render_file_explorer(frame: &mut Frame, app_state: &AppState) {
+    frame.render_widget(Clear, frame.area());
+    frame.render_widget(&app_state.file_explorer.widget(), frame.area());
+}
+
 /// Helper function to create a centered rectangle.
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+fn _centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::vertical([
         Constraint::Percentage((100 - percent_y) / 2),
         Constraint::Percentage(percent_y),
