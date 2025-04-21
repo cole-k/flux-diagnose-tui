@@ -37,6 +37,7 @@ struct Args {
 enum AppMode {
     Browsing,
     EditingFix,
+    GoToLine,
 }
 
 struct AppState {
@@ -134,6 +135,23 @@ impl AppState {
         self.mode = AppMode::Browsing;
     }
 
+    // line_no is 1-indexed
+    fn go_to_line(&mut self, line_no: usize) {
+        let relative_pos = self.current_line.saturating_sub(self.scroll_offset);
+        self.current_line = line_no.saturating_sub(1).min(self.lines.len().saturating_sub(1));
+        self.scroll_offset = self.current_line.saturating_sub(relative_pos);
+    }
+
+    fn exit_gotoline_mode(&mut self, save: bool) {
+        if save {
+            if let Ok(line_no) = self.input.value().parse::<usize>() {
+                self.go_to_line(line_no);
+            }
+        }
+        self.input.reset();
+        self.mode = AppMode::Browsing;
+    }
+
     fn clear_fix(&mut self) {
         let line_to_clear = self.current_line + 1;
         self.fix_lines.remove(&line_to_clear);
@@ -207,6 +225,7 @@ fn run_app(
         match app_state.mode {
             AppMode::Browsing => handle_browsing_input(event, app_state, content_height)?,
             AppMode::EditingFix => handle_editing_input(event, app_state)?,
+            AppMode::GoToLine => handle_gotoline_input(event, app_state)?,
         }
 
         if app_state.should_quit {
@@ -248,6 +267,9 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
                 KeyCode::Char('c') | KeyCode::Char('x') => {
                     app_state.clear_fix();
                 }
+                KeyCode::Char('g') => {
+                    app_state.mode = AppMode::GoToLine;
+                }
                 _ => {} // Ignore other keys in browsing mode
             }
         }
@@ -273,6 +295,24 @@ fn handle_editing_input(event: Event, app_state: &mut AppState) -> Result<()> {
      Ok(())
 }
 
+fn handle_gotoline_input(event: Event, app_state: &mut AppState) -> Result<()> {
+     if let Event::Key(key) = event {
+         match key.code {
+             KeyCode::Enter => {
+                 app_state.exit_gotoline_mode(true); // Save on Enter
+             }
+             KeyCode::Esc => {
+                 app_state.exit_gotoline_mode(false); // Cancel on Esc
+             }
+             _ => {
+                 // Pass the event to tui-input
+                 app_state.input.handle_event(&event);
+             }
+         }
+     }
+     Ok(())
+}
+
 
 fn ui(frame: &mut Frame, app_state: &AppState) {
     let area = frame.area();
@@ -282,8 +322,17 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
     render_file_view(frame, app_state, area, theme_bg);
 
     // --- Input Dialog (if active) ---
-    if app_state.mode == AppMode::EditingFix {
-        render_input_dialog(frame, app_state, theme_bg);
+    match app_state.mode {
+        AppMode::EditingFix => {
+            let line_num = app_state.editing_line.unwrap_or(0); // Should always be Some in EditingFix mode
+            let title = format!("Enter fix for Line {}:", line_num);
+            render_input_dialog(frame, title, app_state, theme_bg);
+        }
+        AppMode::GoToLine => {
+            let title = "Jump to line:".to_string();
+            render_input_dialog(frame, title, app_state, theme_bg);
+        }
+        _ => {}
     }
 }
 
@@ -499,20 +548,19 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
     }
 }
 
-fn render_input_dialog(frame: &mut Frame, app_state: &AppState, _theme_bg: Color) {
+fn render_input_dialog(frame: &mut Frame, title: String, app_state: &AppState, _theme_bg: Color) {
     let input_width = 60; // Desired width of the input box
     let input_height = 3;  // Height (1 for border, 1 for text, 1 for border)
 
     let area = frame.area();
     let popup_area = centered_rect_abs(input_width, input_height, area);
 
-    let line_num = app_state.editing_line.unwrap_or(0); // Should always be Some in EditingFix mode
     let input_widget = Paragraph::new(app_state.input.value())
         .style(Style::default())
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(format!(" Enter fix for Line {}: (Enter = Save, Esc = Cancel) ", line_num))
+                .title(format!(" {} (Enter = Save, Esc = Cancel) ", title))
                 .border_style(Style::default().fg(Color::Yellow)), // Highlight border
         );
 
