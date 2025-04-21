@@ -40,6 +40,7 @@ enum AppMode {
     EditingFix,
     GoToLine,
     FileExplorer,
+    ConfirmationDialog,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -53,6 +54,19 @@ impl LineLoc {
     fn new(line: usize, file: PathBuf) -> Self {
         Self { line, file }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfirmationChoice {
+    Yes,
+    No,
+}
+
+struct ConfirmationState {
+    message: String,
+    action_on_confirm: Box<dyn FnOnce(&mut AppState, bool) -> Result<()>>,
+    current_choice: ConfirmationChoice,
+    mode_on_exit: AppMode,
 }
 
 struct AppState {
@@ -72,6 +86,7 @@ struct AppState {
     input: Input,           // Input field state for tui-input
     editing_line: Option<usize>, // Track which line (1-based) is being edited
     file_explorer: FileExplorer,
+    confirmation: Option<ConfirmationState>,
 }
 
 impl AppState {
@@ -104,6 +119,7 @@ impl AppState {
             input: Input::default(),
             editing_line: None,
             file_explorer,
+            confirmation: None,
         })
     }
 
@@ -191,6 +207,57 @@ impl AppState {
         self.mode = AppMode::Browsing;
         Ok(())
     }
+
+    fn toggle_confirmation_choice(&mut self) {
+        if let Some(state) = self.confirmation.as_mut() {
+            let new_choice = match state.current_choice {
+                ConfirmationChoice::No  => ConfirmationChoice::Yes,
+                ConfirmationChoice::Yes => ConfirmationChoice::No,
+            };
+            state.current_choice = new_choice;
+        }
+    }
+
+    fn set_confirmation_choice(&mut self, choice: ConfirmationChoice) {
+        if let Some(state) = self.confirmation.as_mut() {
+            state.current_choice = choice;
+        }
+    }
+
+    // Helper function to initiate a confirmation request
+    fn request_confirmation<F>(&mut self, message: String, mode_on_exit: AppMode, action_on_confirm: F)
+    where
+        // FnOnce: The action runs once.
+        // &mut AppState: It can modify the application state.
+        // 'static: Necessary because it's stored in the AppState. Usually fine
+        //          for closures defined inline that capture state modification logic.
+        F: FnOnce(&mut AppState, bool) -> Result<()> + 'static,
+    {
+        self.confirmation = Some(ConfirmationState {
+            message,
+            action_on_confirm: Box::new(action_on_confirm),
+            current_choice: ConfirmationChoice::No,
+            mode_on_exit,
+        });
+        // Optional: You could switch AppMode here if you have one
+        self.mode = AppMode::ConfirmationDialog;
+    }
+
+    // Helper function to resolve the confirmation
+    fn resolve_confirmation(&mut self) -> Result<()> {
+        if let Some(state) = self.confirmation.take() {
+            (state.action_on_confirm)(self, state.current_choice == ConfirmationChoice::Yes)?;
+            self.mode = state.mode_on_exit;
+        }
+        Ok(())
+    }
+
+    // Helper function to cancel the confirmation
+    fn cancel_confirmation(&mut self) {
+        if let Some(state) = self.confirmation.take() {
+            self.mode = state.mode_on_exit;
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -262,6 +329,7 @@ fn run_app(
             AppMode::EditingFix => handle_editing_input(event, app_state)?,
             AppMode::GoToLine => handle_gotoline_input(event, app_state)?,
             AppMode::FileExplorer => handle_file_explorer_input(event, app_state)?,
+            AppMode::ConfirmationDialog => handle_confirmation_dialog_input(event, app_state)?,
         }
 
         if app_state.should_quit {
@@ -275,7 +343,12 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
     if let Event::Key(key) = event {
         if key.kind == KeyEventKind::Press {
             match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => app_state.should_quit = true,
+                KeyCode::Char('q') | KeyCode::Esc => {
+                    app_state.request_confirmation("Really quit?".to_string(), AppMode::Browsing, |app_state, confirmed| {
+                        app_state.should_quit = confirmed;
+                        Ok(())
+                    })
+                },
                 // Navigation
                 KeyCode::Up | KeyCode::Char('k') => app_state.move_up(),
                 KeyCode::Down | KeyCode::Char('j') => app_state.move_down(),
@@ -378,6 +451,31 @@ fn handle_file_explorer_input(event: Event, app_state: &mut AppState) -> Result<
     Ok(())
 }
 
+fn handle_confirmation_dialog_input(event: Event, app_state: &mut AppState) -> Result<()> {
+    if let Event::Key(key) = event {
+        match key.code {
+        // Navigation within the dialog
+        KeyCode::Left | KeyCode::Right | KeyCode::Tab | KeyCode::BackTab => {
+            app_state.toggle_confirmation_choice();
+        }
+        KeyCode::Char('y') | KeyCode::Char('Y') => {
+            // Directly confirm
+            app_state.set_confirmation_choice(ConfirmationChoice::Yes);
+            app_state.resolve_confirmation()?;
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            // Directly cancel
+            app_state.set_confirmation_choice(ConfirmationChoice::No);
+            app_state.resolve_confirmation()?;
+        }
+        KeyCode::Enter => {
+            app_state.resolve_confirmation()?;
+        }
+        _ => {} // Ignore other keys while confirming
+        }
+    }
+    Ok(())
+}
 
 
 fn ui(frame: &mut Frame, app_state: &AppState) {
@@ -400,6 +498,11 @@ fn ui(frame: &mut Frame, app_state: &AppState) {
         }
         AppMode::FileExplorer => {
             render_file_explorer(frame, app_state);
+        }
+        AppMode::ConfirmationDialog => {
+            if let Some(confirm_state) = &app_state.confirmation {
+                render_confirmation_dialog(frame, &confirm_state);
+            }
         }
         _ => {}
     }
@@ -504,7 +607,7 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
 
     // --- Create Main Widget ---
     let title = format!(
-        " File: {} | Line {}/{} | Scroll {} | Mode: {:?} ",
+        " File: {} | Line {}/{} | Offset {} | Mode: {:?} ",
         app_state.current_file_path.file_name().unwrap_or_default().to_string_lossy(),
         app_state.current_line + 1,
         app_state.lines.len(),
@@ -651,6 +754,58 @@ fn render_input_dialog(frame: &mut Frame, title: String, app_state: &AppState, _
 fn render_file_explorer(frame: &mut Frame, app_state: &AppState) {
     frame.render_widget(Clear, frame.area());
     frame.render_widget(&app_state.file_explorer.widget(), frame.area());
+}
+
+fn render_confirmation_dialog(frame: &mut Frame, confirm_state: &ConfirmationState) {
+    let area = frame.area();
+    // Define dialog size (e.g., 60% width, fixed height or based on text)
+    let popup_width = (area.width as f32 * 0.6).min(60.0) as u16; // Max 60 cells wide
+    // Calculate height needed for message + 1 line for buttons + 2 lines for borders
+    let message_lines = textwrap::wrap(&confirm_state.message, popup_width as usize - 2); // -2 for padding/borders
+    let popup_height = (message_lines.len() as u16 + 2 + 2).min(area.height);
+
+    // Center the popup area
+    let popup_area = centered_rect_abs(popup_width, popup_height, area);
+
+    // Create the text for Yes/No buttons, highlighting the selected one
+    let yes_style = if confirm_state.current_choice == ConfirmationChoice::Yes {
+        Style::default().fg(Color::White).bg(Color::Red)
+    } else {
+        Style::default().fg(Color::LightRed)
+    };
+    let no_style = if confirm_state.current_choice == ConfirmationChoice::No {
+        Style::default().fg(Color::White).bg(Color::Red)
+    } else {
+        Style::default().fg(Color::LightRed)
+    };
+
+    let buttons = Line::from(vec![
+        Span::styled(" Yes ", yes_style),
+        Span::raw(" | "),
+        Span::styled(" No ", no_style),
+    ]).alignment(Alignment::Center);
+
+    // Combine message and buttons
+    let mut text_lines = message_lines.iter().map(|s| Line::from(s.as_ref())).collect::<Vec<_>>();
+    text_lines.push(Line::from("")); // Spacer line
+    text_lines.push(buttons);
+    let text = Text::from(text_lines).alignment(Alignment::Center);
+
+
+    // Create the block and paragraph
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .wrap(Wrap { trim: false }) // Let text wrap inside
+        .alignment(Alignment::Center) // Center lines within the block
+        .style(Style::default().bg(Color::DarkGray)); // Dialog background
+
+    // Render: Clear area first, then draw the dialog
+    frame.render_widget(Clear, popup_area); // Clear the space for the popup
+    frame.render_widget(paragraph, popup_area);
 }
 
 /// Helper function to create a centered rectangle.
