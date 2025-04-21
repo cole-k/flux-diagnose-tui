@@ -9,6 +9,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Borders, Clear, Paragraph, Wrap}, // Added Clear
 };
+use unicode_width::UnicodeWidthStr;
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
@@ -39,6 +40,8 @@ enum AppMode {
 }
 
 struct AppState {
+    error_message: String,
+    show_full_error: bool,
     file_path: PathBuf,
     lines: Vec<String>,
     error_lines: HashSet<usize>,        // 1-indexed line number of lines with errors
@@ -54,7 +57,7 @@ struct AppState {
 }
 
 impl AppState {
-    fn new(file_path: PathBuf, error_lines: HashSet<usize>) -> Result<Self> {
+    fn new(file_path: PathBuf, error_message: String, error_lines: HashSet<usize>) -> Result<Self> {
         let file = File::open(&file_path)
             .with_context(|| format!("Failed to open file: {:?}", file_path))?;
         let reader = BufReader::new(file);
@@ -66,6 +69,8 @@ impl AppState {
         let theme = theme_set.themes["base16-ocean.dark"].clone();
 
         Ok(AppState {
+            error_message,
+            show_full_error: true,
             file_path,
             lines,
             error_lines,
@@ -145,7 +150,14 @@ fn main() -> Result<()> {
 
     // Example: Mark line 5 as having an error
     let error_lines: HashSet<usize> = vec![5].into_iter().collect();
-    let mut app_state = AppState::new(args.file_path, error_lines)?;
+    let error_message = r#"warning: function `centered_rect` is never used
+   --> src/main.rs:430:4
+    |
+430 | fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    |    ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default"#.to_string();
+    let mut app_state = AppState::new(args.file_path, error_message, error_lines)?;
 
     run_app(&mut terminal, &mut app_state)?;
 
@@ -393,6 +405,98 @@ fn render_file_view(frame: &mut Frame, app_state: &AppState, area: Rect, theme_b
         .style(Style::default().bg(theme_bg)); // Ensure paragraph background matches theme
 
     frame.render_widget(paragraph, area);
+
+    if !app_state.error_message.is_empty() && area.width > 0 && area.height > 0 {
+        let error_text_raw = &app_state.error_message;
+        let mut popup_content_lines: Vec<String> = Vec::new();
+        let mut popup_width: usize = 0;
+        let mut popup_height: usize = 0;
+
+        // Calculate the content, required width, and height based on the mode
+        if app_state.show_full_error {
+            // Wrap text based on available screen width to determine lines
+            let wrapped_lines = textwrap::wrap(error_text_raw, area.width as usize);
+            popup_height = wrapped_lines.len().min(area.height as usize); // Cap height
+
+            // Find the widest line among those that will be displayed
+            popup_width = wrapped_lines
+                .iter()
+                .take(popup_height) // Only consider lines that fit vertically
+                .map(|line| UnicodeWidthStr::width(line.as_ref()))
+                .max()
+                .unwrap_or(0)
+                .min(area.width as usize); // Cap width
+
+            popup_content_lines = wrapped_lines
+                .into_iter()
+                .take(popup_height)
+                .map(|cow| cow.into_owned())
+                .collect();
+
+        } else {
+            // Show only the first line, truncated if needed
+            if let Some(first_line) = error_text_raw.lines().next() {
+                 popup_height = 1;
+                 // Calculate width based on visible characters, truncate if needed
+                 let max_possible_width = area.width as usize;
+                 let mut truncated_line = String::with_capacity(max_possible_width);
+                 let mut current_width = 0;
+                 for c in first_line.chars() {
+                     // Use unicode_width::UnicodeWidthChar::width(c).unwrap_or(1) for char width
+                     let char_width = UnicodeWidthStr::width(c.to_string().as_str());
+                     if current_width + char_width <= max_possible_width {
+                         truncated_line.push(c);
+                         current_width += char_width;
+                     } else {
+                         break; // Stop if adding the next char exceeds width
+                     }
+                 }
+                 popup_width = current_width;
+                 popup_content_lines.push(truncated_line);
+
+            } else {
+                // Error message exists but is empty or only newlines
+                popup_height = 0; // Will prevent rendering
+                popup_width = 0;
+            }
+        }
+
+        // Proceed only if the calculated dimensions are valid
+        if popup_width > 0 && popup_height > 0 {
+            // Calculate the pop-up area Rect (top-right corner)
+            // Add +2 to width/height for borders
+            let popup_render_width = (popup_width + 2).min(area.width as usize) as u16;
+            let popup_render_height = (popup_height + 2).min(area.height as usize) as u16;
+
+            let popup_rect = {
+                let x = area.right().saturating_sub(popup_render_width);
+                let y = area.top()+1; // Place at top-right
+                Rect::new(x, y, popup_render_width, popup_render_height)
+            };
+
+            // Create the pop-up widget (Paragraph wrapped in a Block)
+            let popup_text = Text::from(popup_content_lines.join("\n"));
+
+            let popup_paragraph = Paragraph::new(popup_text)
+                .style(Style::default().fg(Color::White)) // Text color inside popup
+                // No specific alignment needed here, block position handles overall alignment
+                .block(
+                    Block::default()
+                        .title(" Error ")
+                        .title_style(Style::default().fg(Color::White).bg(Color::Red).bold())
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Red))
+                        // Set background color for the block area to make it opaque
+                        .style(Style::default().bg(Color::DarkGray)), // Background of the popup area
+                );
+
+            // Render the popup:
+            // 1. Clear the area first (important for transparency if bg wasn't set)
+            // 2. Render the popup widget
+            frame.render_widget(Clear, popup_rect); // Erase underlying content
+            frame.render_widget(popup_paragraph, popup_rect);
+        }
+    }
 }
 
 fn render_input_dialog(frame: &mut Frame, app_state: &AppState, _theme_bg: Color) {
