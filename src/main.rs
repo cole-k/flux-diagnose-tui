@@ -88,6 +88,9 @@ struct AppState {
     show_full_error: bool,
     // FIXME: need to canonicalize file paths w.r.t project root
     current_file_path: PathBuf,
+    /// Saves the location of the (cursor, offset) in each path in case you
+    /// return to a file
+    file_locations: BTreeMap<PathBuf, (usize, usize)>,
     lines: Vec<String>,
     error_lines: HashSet<LineLoc>,        // 1-indexed line number of lines with errors
     fix_lines: BTreeMap<LineLoc, Option<String>>, // 1-indexed line number to fix text (None means there is a fix but isn't provided)
@@ -121,6 +124,7 @@ impl AppState {
             error_message,
             show_full_error: true,
             current_file_path: file_path,
+            file_locations: BTreeMap::new(),
             lines,
             error_lines,
             fix_lines: BTreeMap::new(),
@@ -212,11 +216,16 @@ impl AppState {
     fn exit_file_explorer_mode(&mut self, go: bool) -> Result<()> {
         let selected_file = self.file_explorer.current();
         if go && !selected_file.is_dir() {
+            // Save the current location
+            self.file_locations.insert(self.current_file_path.clone(), (self.current_line, self.scroll_offset));
+            // Go to the new location
             self.current_file_path = selected_file.path().clone();
             let file = File::open(&self.current_file_path)
                 .with_context(|| format!("Failed to open file: {:?}", self.current_file_path))?;
             let reader = BufReader::new(file);
             self.lines = reader.lines().collect::<Result<_, _>>()?;
+            // Update the location
+            (self.current_line, self.scroll_offset) = *self.file_locations.get(&self.current_file_path).unwrap_or(&(0, 0));
         }
         self.mode = AppMode::Browsing;
         Ok(())
@@ -293,7 +302,7 @@ fn main() -> Result<()> {
     |    ^^^^^^^^^^^^^
     |
     = note: `#[warn(dead_code)]` on by default"#.to_string();
-    let mut app_state = AppState::new(args.file_path, error_message, error_lines)?;
+    let mut app_state = AppState::new(args.file_path.canonicalize()?, error_message, error_lines)?;
 
     run_app(&mut terminal, &mut app_state)?;
 
@@ -366,13 +375,21 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
                         Ok(())
                     })
                 },
+                KeyCode::Char('s') => {
+                    app_state.request_confirmation("Really skip?".to_string(), None, AppMode::Browsing, |app_state, confirmed| {
+                        if confirmed {
+                            app_state.exit_intent = Some(ExitIntent::Skip);
+                        }
+                        Ok(())
+                    })
+                },
                 KeyCode::Char('z') | KeyCode::Char('n') => {
                     let (confirmation_title, confirmation_message) = make_confirmation_message(&app_state.fix_lines);
                     app_state.request_confirmation(confirmation_title, confirmation_message, AppMode::Browsing, |app_state, confirmed| {
                         if confirmed {
                             app_state.exit_intent = Some(ExitIntent::SaveAndRedo);
                         } else {
-                            app_state.exit_intent = Some(ExitIntent::Skip);
+                            app_state.exit_intent = Some(ExitIntent::SaveAndNext);
                         }
                         Ok(())
                     })
