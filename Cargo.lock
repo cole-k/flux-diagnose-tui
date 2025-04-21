@@ -350,6 +350,8 @@ dependencies = [
  "crossterm",
  "ratatui",
  "ratatui-explorer",
+ "serde",
+ "serde_json",
  "syntect",
  "syntect-tui",
  "textwrap",

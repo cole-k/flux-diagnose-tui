@@ -25,6 +25,7 @@ use syntect::{
 };
 use tui_input::{backend::crossterm::EventHandler, Input}; // Added tui-input
 use ratatui_explorer::FileExplorer;
+use serde::{Deserialize, Serialize};
 
 /// Simple File Viewer with Syntax Highlighting and Fix Input
 #[derive(Parser, Debug)]
@@ -318,7 +319,6 @@ fn main() -> Result<()> {
             println!("{:?}: {:?}", line_loc, fix);
         }
     }
-
 
     Ok(())
 }
@@ -950,3 +950,120 @@ fn make_confirmation_message(fix_lines: &BTreeMap<LineLoc, Option<String>>) -> (
 
     (title, Some(message))
 }
+
+// --- Top Level Structure ---
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct CompilerMessage {
+    pub reason: String, // e.g., "compiler-message"
+    pub package_id: String,
+    pub manifest_path: PathBuf, // Using PathBuf for file paths
+    pub target: Target,
+    pub message: Diagnostic,
+}
+
+// --- Target Structure ---
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Target {
+    pub kind: Vec<String>, // e.g., ["dylib", "rlib"]
+    pub crate_types: Vec<String>, // e.g., ["dylib", "rlib"]
+    pub name: String,
+    pub src_path: PathBuf, // Using PathBuf for file paths
+    pub edition: String, // e.g., "2021"
+    pub doc: bool,
+    pub doctest: bool,
+    pub test: bool,
+}
+
+// --- Diagnostic Structure (Recursive) ---
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Diagnostic {
+    // The main message string. Often present at the top level.
+    pub message: String,
+
+    // The error/warning code, e.g., "E0999". Optional.
+    pub code: Option<DiagnosticCode>,
+
+    // Severity level, e.g., "error", "warning", "note"
+    pub level: String, // Could be an Enum later if needed
+
+    // Associated source code locations
+    pub spans: Vec<RustSpan>,
+
+    // Nested diagnostic messages (often notes or help messages)
+    pub children: Vec<Diagnostic>,
+
+    // The fully rendered message string. Often null in children.
+    pub rendered: Option<String>,
+
+    // This field seems specific to the top-level message object,
+    // using rename for the '$' and Option since it might not be in children.
+    #[serde(rename = "$message_type")]
+    pub message_type: Option<String>, // e.g., "diagnostic"
+}
+
+// --- Diagnostic Code Structure ---
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DiagnosticCode {
+    pub code: String,          // e.g., "E0999"
+    pub explanation: Option<String>, // Often null
+}
+
+// --- Span Structure ---
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RustSpan {
+    pub file_name: String,
+    pub byte_start: usize,
+    pub byte_end: usize,
+    pub line_start: usize,
+    pub line_end: usize,
+    pub column_start: usize,
+    pub column_end: usize,
+    pub is_primary: bool,         // Is this the primary span for the diagnostic?
+    pub text: Vec<TextHighlight>, // The code snippet associated with the span
+    pub label: Option<String>,    // Label displayed with the span, e.g., "a precondition cannot be proved"
+    pub suggested_replacement: Option<String>, // Code suggestion
+    pub suggestion_applicability: Option<String>, // e.g., "MachineApplicable", "HasPlaceholders", etc. (Could be Enum)
+    // pub expansion: Option<serde_json::Value>, // Omitted for simplicity as requested (was null)
+}
+
+// --- Text Highlight Structure (within Span) ---
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TextHighlight {
+    pub text: String, // The line of code
+    pub highlight_start: usize, // 1-based column index
+    pub highlight_end: usize, // 1-based column index
+}
+
+// // --- Example Usage (optional, for testing) ---
+// fn test() -> Result<(), serde_json::Error> {
+//     let json_data = r#""#;
+//
+//     let parsed_message: CompilerMessage = serde_json::from_str(json_data)?;
+//
+//     println!("{:#?}", parsed_message);
+//
+//     // Example: Accessing nested information
+//     println!("\nTarget Name: {}", parsed_message.target.name);
+//     println!("Primary Diagnostic Level: {}", parsed_message.message.level);
+//     if let Some(code) = &parsed_message.message.code {
+//         println!("Primary Diagnostic Code: {}", code.code);
+//     }
+//     if let Some(span) = parsed_message.message.spans.first() {
+//         println!("First Span File: {}", span.file_name);
+//         println!("First Span Line: {}", span.line_start);
+//         if let Some(text_highlight) = span.text.first() {
+//             println!("First Span Text: {}", text_highlight.text.trim());
+//         }
+//     }
+//     if let Some(child) = parsed_message.message.children.first() {
+//          println!("First Child Message: {}", child.message);
+//     }
+//
+//     Ok(())
+// }
