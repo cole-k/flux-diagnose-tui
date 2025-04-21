@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use anyhow::{Context, Result};
 use clap::Parser;
 use crossterm::{
@@ -63,10 +64,23 @@ enum ConfirmationChoice {
 }
 
 struct ConfirmationState {
-    message: String,
+    title: String,
+    body: Option<String>,
     action_on_confirm: Box<dyn FnOnce(&mut AppState, bool) -> Result<()>>,
     current_choice: ConfirmationChoice,
     mode_on_exit: AppMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExitIntent {
+    /// Quit the entire TUI
+    Quit,
+    /// Record the fix lines and do this error again
+    SaveAndRedo,
+    /// Record the fix lines and proceed to next error
+    SaveAndNext,
+    /// Skip and proceed to next error
+    Skip,
 }
 
 struct AppState {
@@ -79,7 +93,7 @@ struct AppState {
     fix_lines: BTreeMap<LineLoc, Option<String>>, // 1-indexed line number to fix text (None means there is a fix but isn't provided)
     current_line: usize,               // 0-indexed line number currently selected/focused
     scroll_offset: usize,              // 0-indexed line number at the top of the viewport
-    should_quit: bool,
+    exit_intent: Option<ExitIntent>,
     syntax_set: SyntaxSet,
     theme: Theme,
     mode: AppMode,          // Current application mode
@@ -112,7 +126,7 @@ impl AppState {
             fix_lines: BTreeMap::new(),
             current_line: 0,
             scroll_offset: 0,
-            should_quit: false,
+            exit_intent: None,
             syntax_set,
             theme,
             mode: AppMode::Browsing,
@@ -225,7 +239,7 @@ impl AppState {
     }
 
     // Helper function to initiate a confirmation request
-    fn request_confirmation<F>(&mut self, message: String, mode_on_exit: AppMode, action_on_confirm: F)
+    fn request_confirmation<F>(&mut self, title: String, body: Option<String>, mode_on_exit: AppMode, action_on_confirm: F)
     where
         // FnOnce: The action runs once.
         // &mut AppState: It can modify the application state.
@@ -234,7 +248,8 @@ impl AppState {
         F: FnOnce(&mut AppState, bool) -> Result<()> + 'static,
     {
         self.confirmation = Some(ConfirmationState {
-            message,
+            title,
+            body,
             action_on_confirm: Box::new(action_on_confirm),
             current_choice: ConfirmationChoice::No,
             mode_on_exit,
@@ -320,7 +335,7 @@ fn run_app(
         // Global quit shortcut
         if let Event::Key(key) = event {
              if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                 app_state.should_quit = true;
+                 app_state.exit_intent = Some(ExitIntent::Quit);
              }
         }
 
@@ -332,7 +347,7 @@ fn run_app(
             AppMode::ConfirmationDialog => handle_confirmation_dialog_input(event, app_state)?,
         }
 
-        if app_state.should_quit {
+        if app_state.exit_intent.is_some() {
             break;
         }
     }
@@ -344,8 +359,21 @@ fn handle_browsing_input(event: Event, app_state: &mut AppState, content_height:
         if key.kind == KeyEventKind::Press {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => {
-                    app_state.request_confirmation("Really quit?".to_string(), AppMode::Browsing, |app_state, confirmed| {
-                        app_state.should_quit = confirmed;
+                    app_state.request_confirmation("Really quit?".to_string(), None, AppMode::Browsing, |app_state, confirmed| {
+                        if confirmed {
+                            app_state.exit_intent = Some(ExitIntent::Quit);
+                        }
+                        Ok(())
+                    })
+                },
+                KeyCode::Char('z') | KeyCode::Char('n') => {
+                    let (confirmation_title, confirmation_message) = make_confirmation_message(&app_state.fix_lines);
+                    app_state.request_confirmation(confirmation_title, confirmation_message, AppMode::Browsing, |app_state, confirmed| {
+                        if confirmed {
+                            app_state.exit_intent = Some(ExitIntent::SaveAndRedo);
+                        } else {
+                            app_state.exit_intent = Some(ExitIntent::Skip);
+                        }
                         Ok(())
                     })
                 },
@@ -761,8 +789,13 @@ fn render_confirmation_dialog(frame: &mut Frame, confirm_state: &ConfirmationSta
     // Define dialog size (e.g., 60% width, fixed height or based on text)
     let popup_width = (area.width as f32 * 0.6).min(60.0) as u16; // Max 60 cells wide
     // Calculate height needed for message + 1 line for buttons + 2 lines for borders
-    let message_lines = textwrap::wrap(&confirm_state.message, popup_width as usize - 2); // -2 for padding/borders
-    let popup_height = (message_lines.len() as u16 + 2 + 2).min(area.height);
+    let title_lines = textwrap::wrap(&confirm_state.title, popup_width as usize - 2); // -2 for padding/borders
+    let body_lines = if let Some(body) = &confirm_state.body {
+        textwrap::wrap(&body, popup_width as usize - 2)
+    } else {
+        vec!()
+    };
+    let popup_height = ((title_lines.len() + body_lines.len()) as u16 + 2 + 2).min(area.height);
 
     // Center the popup area
     let popup_area = centered_rect_abs(popup_width, popup_height, area);
@@ -785,11 +818,12 @@ fn render_confirmation_dialog(frame: &mut Frame, confirm_state: &ConfirmationSta
         Span::styled(" No ", no_style),
     ]).alignment(Alignment::Center);
 
-    // Combine message and buttons
-    let mut text_lines = message_lines.iter().map(|s| Line::from(s.as_ref())).collect::<Vec<_>>();
+    // Combine message, body, and buttons
+    let mut text_lines = title_lines.iter().map(|s| Line::from(s.as_ref()).alignment(Alignment::Center)).collect::<Vec<_>>();
+    text_lines.extend(body_lines.iter().map(|s| Line::from(s.as_ref()).left_aligned()).collect::<Vec<_>>());
     text_lines.push(Line::from("")); // Spacer line
     text_lines.push(buttons);
-    let text = Text::from(text_lines).alignment(Alignment::Center);
+    let text = Text::from(text_lines);
 
 
     // Create the block and paragraph
@@ -836,4 +870,66 @@ fn centered_rect_abs(width: u16, height: u16, r: Rect) -> Rect {
         width: width.min(r.width),
         height: height.min(r.height),
     }
+}
+
+/// Generates a summary title and body message confirming proposed fixes. The
+/// body is empty if there are no fixes.
+///
+/// Groups fixes by file and counts total fixes and refinements per file.
+///
+/// # Arguments
+///
+/// * `fix_lines` - A map where keys are `LineLoc` (line number and file path)
+///                 and values are `Option<String>`, representing an optional
+///                 refinement suggestion (`Some`) or just a fix (`None`).
+///
+fn make_confirmation_message(fix_lines: &BTreeMap<LineLoc, Option<String>>) -> (String, Option<String>) {
+    // 1. Aggregate stats per file
+    //    Key: PathBuf (file path)
+    //    Value: (total_fixes_in_file, refinement_count_in_file)
+    let mut file_stats: BTreeMap<PathBuf, (usize, usize)> = BTreeMap::new();
+
+    for (line_loc, refinement_opt) in fix_lines.iter() {
+        let stats = file_stats.entry(line_loc.file.clone()).or_insert((0, 0));
+        stats.0 += 1; // Increment total fix count for this file
+        if refinement_opt.is_some() {
+            stats.1 += 1; // Increment refinement count if Some(String)
+        }
+    }
+
+    // 2. Calculate totals
+    let total_fixes = fix_lines.len();
+    let total_files = file_stats.len();
+
+
+    // Use writeln! which handles adding the newline. Requires `use std::fmt::Write;`
+    // Writing to a String using writeln! is infallible, so unwrap() is safe.
+    let title = format!("Confirm {} fixes in {} files:", total_fixes, total_files);
+
+    // 3. Build the output string
+    let mut message = String::new();
+
+    // 4. Sort files alphabetically for consistent output
+    let mut sorted_stats: Vec<_> = file_stats.into_iter().collect();
+    sorted_stats.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
+    if sorted_stats.is_empty() {
+        return (title, None)
+    }
+
+    // 5. Add per-file details
+    for (file_path, (fixes, refinements)) in sorted_stats {
+        // Use path.display() for a printable representation of the path
+        writeln!(
+            &mut message,
+            "   * {}: {} fixes ({} refinements)",
+            file_path.display(),
+            fixes,
+            refinements
+        ).unwrap();
+    }
+
+    // Remove the trailing newline added by the last writeln! if you don't want it
+    // message.pop(); // Optional: depends if you want a trailing newline
+
+    (title, Some(message))
 }
