@@ -6,7 +6,7 @@ use ratatui::{
 };
 use ratatui_explorer::FileExplorer;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, VecDeque},
     fs::File,
     io::{BufRead, BufReader, Stdout},
     path::PathBuf,
@@ -79,7 +79,7 @@ pub struct AppState {
     /// return to a file
     file_locations: BTreeMap<PathBuf, (usize, usize)>,
     lines: Vec<String>,
-    error_lines: HashSet<LineLoc>, // 1-indexed line number of lines with errors
+    error_lines: VecDeque<LineLoc>, // 1-indexed line number of lines with errors
     // FIXME: make private when we convert the AppState to some kind of output format.
     pub fix_lines: BTreeMap<LineLoc, Option<String>>, // 1-indexed line number to fix text (None means there is a fix but isn't provided)
     note: Option<String>,
@@ -97,14 +97,9 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        file_path: PathBuf,
         error_message: String,
-        error_lines: HashSet<LineLoc>,
+        error_lines: VecDeque<LineLoc>,
     ) -> Result<Self> {
-        let file = File::open(&file_path)
-            .with_context(|| format!("Failed to open file: {:?}", file_path))?;
-        let reader = BufReader::new(file);
-        let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
 
         // Load syntax highlighting defaults
         let syntax_set = SyntaxSet::load_defaults_newlines();
@@ -113,12 +108,18 @@ impl AppState {
         let file_explorer_theme = ratatui_explorer::Theme::default().add_default_title();
         let file_explorer = FileExplorer::with_theme(file_explorer_theme)?;
 
-        Ok(AppState {
+        let current_file_path = error_lines
+            .front()
+            .context("There are no errors given")?
+            .file
+            .clone();
+
+        let mut state = Self {
             error_message,
             show_full_error: true,
-            current_file_path: file_path,
+            current_file_path,
             file_locations: BTreeMap::new(),
-            lines,
+            lines: vec!(),
             error_lines,
             fix_lines: BTreeMap::new(),
             note: None,
@@ -132,7 +133,11 @@ impl AppState {
             editing_line: None,
             file_explorer,
             confirmation: None,
-        })
+        };
+
+        state.next_error()?;
+
+        Ok(state)
     }
 
     fn move_up(&mut self) {
@@ -243,24 +248,29 @@ impl AppState {
     fn exit_file_explorer_mode(&mut self, go: bool) -> Result<()> {
         let selected_file = self.file_explorer.current();
         if go && !selected_file.is_dir() {
-            // Save the current location
-            self.file_locations.insert(
-                self.current_file_path.clone(),
-                (self.current_line, self.scroll_offset),
-            );
-            // Go to the new location
-            self.current_file_path = selected_file.path().clone();
-            let file = File::open(&self.current_file_path)
-                .with_context(|| format!("Failed to open file: {:?}", self.current_file_path))?;
-            let reader = BufReader::new(file);
-            self.lines = reader.lines().collect::<Result<_, _>>()?;
-            // Update the location
-            (self.current_line, self.scroll_offset) = *self
-                .file_locations
-                .get(&self.current_file_path)
-                .unwrap_or(&(0, 0));
+            self.go_to_file(selected_file.path().clone())?;
         }
         self.mode = AppMode::Browsing;
+        Ok(())
+    }
+
+    fn go_to_file(&mut self, file: PathBuf) -> Result<()> {
+        // Save the current location
+        self.file_locations.insert(
+            self.current_file_path.clone(),
+            (self.current_line, self.scroll_offset),
+        );
+        // Go to the new location
+        self.current_file_path = file;
+        let file = File::open(&self.current_file_path)
+            .with_context(|| format!("Failed to open file: {:?}", self.current_file_path))?;
+        let reader = BufReader::new(file);
+        self.lines = reader.lines().collect::<Result<_, _>>()?;
+        // Update the location
+        (self.current_line, self.scroll_offset) = *self
+            .file_locations
+            .get(&self.current_file_path)
+            .unwrap_or(&(0, 0));
         Ok(())
     }
 
@@ -318,6 +328,16 @@ impl AppState {
         if let Some(state) = self.confirmation.take() {
             self.mode = state.mode_on_exit;
         }
+    }
+
+    fn next_error(&mut self) -> Result<()> {
+        // Should never be empty
+        let next_error = self.error_lines.pop_front().unwrap();
+        self.go_to_file(next_error.file.clone())?;
+        // LineLocs are 1-indexed but so is go to line;
+        self.go_to_line(next_error.line);
+        self.error_lines.push_back(next_error);
+        Ok(())
     }
 }
 
@@ -432,6 +452,9 @@ fn handle_browsing_input(
                 }
                 KeyCode::Char('h') => {
                     app_state.show_full_error = !app_state.show_full_error;
+                }
+                KeyCode::Char('e') => {
+                    app_state.next_error()?;
                 }
                 _ => {} // Ignore other keys in browsing mode
             }

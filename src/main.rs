@@ -6,7 +6,6 @@ use crossterm::{
 };
 use ratatui::prelude::*;
 use std::{
-    collections::HashSet,
     io::stdout,
     path::{Path, PathBuf},
 };
@@ -33,8 +32,10 @@ fn main() -> Result<()> {
     terminal.clear()?;
 
     // Example: Mark line 5 as having an error
-    let line_loc = LineLoc::new(5, args.file_path.clone());
-    let error_lines: HashSet<_> = vec![line_loc].into_iter().collect();
+    let line_loc = LineLoc::new(5, args.file_path.canonicalize()?);
+    let line_loc2 = LineLoc::new(16, args.file_path.canonicalize()?);
+    let line_loc3 = LineLoc::new(200, Path::new("/home/cole/research/flux-diagnose-tui/src/run_cmd.rs").to_path_buf());
+    let error_lines = vec![line_loc, line_loc2, line_loc3].into();
     let error_message = r#"warning: function `centered_rect` is never used
    --> src/main.rs:430:4
     |
@@ -43,7 +44,7 @@ fn main() -> Result<()> {
     |
     = note: `#[warn(dead_code)]` on by default"#
         .to_string();
-    let mut app_state = AppState::new(args.file_path.canonicalize()?, error_message, error_lines)?;
+    let mut app_state = AppState::new(error_message, error_lines)?;
 
     run_app(&mut terminal, &mut app_state)?;
 
