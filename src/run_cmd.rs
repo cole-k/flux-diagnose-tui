@@ -333,7 +333,9 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
     let command_desc = "cargo flux";
     let mut cmd = Command::new("cargo");
     cmd.args(["flux", "--message-format=json"])
-        .env("FLUXFLAGS", "-Fdebug-binder-output")
+        // NOTE: I think we only need this for evaluating
+        // the output of new flux errors, not for diagnosing existing errors.
+        // .env("FLUXFLAGS", "-Fdebug-binder-output")
         .current_dir(&canonical_directory)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());

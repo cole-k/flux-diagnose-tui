@@ -1009,12 +1009,10 @@ fn make_confirmation_message(
     let total_fixes = fix_lines.len();
     let total_files = file_stats.len();
 
-    // Use writeln! which handles adding the newline. Requires `use std::fmt::Write;`
-    // Writing to a String using writeln! is infallible, so unwrap() is safe.
-    let title = format!("Confirm {} fixes in {} files:", total_fixes, total_files);
+    let title = "Add a different set of fixes for this file?".to_string();
 
     // 3. Build the output string
-    let mut message = String::new();
+    let mut message = format!("Summary: {} fixes in {} files\n", total_fixes, total_files);
 
     // 4. Sort files alphabetically for consistent output
     let mut sorted_stats: Vec<_> = file_stats.into_iter().collect();
