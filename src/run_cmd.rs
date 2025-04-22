@@ -1,5 +1,8 @@
 use anyhow::{bail, Context, Result};
-use git2::{ErrorCode, FetchOptions, FetchPrune, Oid, ReferenceType, RemoteCallbacks, Repository, Status, StatusOptions}; // Added FetchOptions, FetchPrune, RemoteCallbacks
+use git2::{
+    ErrorCode, FetchOptions, FetchPrune, Oid, ReferenceType, RemoteCallbacks, Repository, Status,
+    StatusOptions,
+}; // Added FetchOptions, FetchPrune, RemoteCallbacks
 use log::{error, info, warn}; // Added error level
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -129,7 +132,7 @@ fn fetch_all_remotes_prune(repo: &Repository) -> Result<()> {
         git2::Cred::default() // Try default system credential helpers
             .or_else(|e| {
                 // Fallback to SSH key from agent or standard paths if username is 'git' or not specified
-                if username_from_url.map_or(true, |u| u == "git") {
+                if username_from_url.is_none_or(|u| u == "git") {
                      git2::Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
                 } else {
                     Err(e) // If not default and not SSH agent, propagate original error
@@ -295,7 +298,6 @@ pub fn print_repo_status_warning(status_info: &RepoStatusInfo) {
     let changes_description = warning_parts.join(" and ");
     println!("WARNING: there are {} changes", changes_description);
     // --- End of header construction ---
-
 
     // --- Print Uncommitted Files ---
     if has_uncommitted_files {
@@ -572,7 +574,7 @@ pub struct RustSpan {
 }
 
 impl RustSpan {
-    pub fn to_line_locs(&self, repo_root: &PathBuf) -> Vec<LineLoc> {
+    pub fn to_line_locs(&self, repo_root: &Path) -> Vec<LineLoc> {
         let mut output = Vec::with_capacity(1 + self.line_end.saturating_sub(self.line_start));
         let file = repo_root.join(Path::new(&self.file_name));
         let mut line = self.line_start;

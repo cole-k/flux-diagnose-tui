@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap}, // Added Clear
 };
 use ratatui_explorer::FileExplorer;
+use std::fmt::Write;
 use std::{
     collections::{BTreeMap, VecDeque},
     fs::File,
@@ -12,7 +13,6 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-use std::fmt::Write;
 use syntect::{
     easy::HighlightLines,
     highlighting::{Theme, ThemeSet},
@@ -96,11 +96,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(
-        error_message: String,
-        error_lines: VecDeque<LineLoc>,
-    ) -> Result<Self> {
-
+    pub fn new(error_message: String, error_lines: VecDeque<LineLoc>) -> Result<Self> {
         // Load syntax highlighting defaults
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
@@ -119,7 +115,7 @@ impl AppState {
             show_full_error: true,
             current_file_path,
             file_locations: BTreeMap::new(),
-            lines: vec!(),
+            lines: vec![],
             error_lines,
             fix_lines: BTreeMap::new(),
             note: None,

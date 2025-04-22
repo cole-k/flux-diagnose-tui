@@ -5,10 +5,13 @@ use crossterm::{
     ExecutableCommand,
 };
 use ratatui::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, VecDeque}, fs::File, io::{stdout, BufRead, BufReader}, path::{Path, PathBuf}
+    collections::{HashMap, VecDeque},
+    fs::File,
+    io::{stdout, BufRead, BufReader},
+    path::{Path, PathBuf},
 };
-use serde::{Serialize, Deserialize};
 // Use once_cell for lazy compilation of the regex
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -27,15 +30,12 @@ struct Args {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ErrorAndFixes {
-
-}
+struct ErrorAndFixes {}
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let (lines, git_info) =
-        run_cmd::run_flux_in_dir(&args.dir)?;
+    let (lines, git_info) = run_cmd::run_flux_in_dir(&args.dir)?;
 
     let dir_path = git_info.root_path.join(git_info.rel_path_from_root.clone());
 
@@ -57,17 +57,29 @@ fn main() -> Result<()> {
         //     .collect::<Vec<&str>>()
         //     .join("\n");
         let rendered_message = line.message.rendered.unwrap();
-        let mut error_lines: VecDeque<_> = line.message.spans.iter().flat_map(|span| span.to_line_locs(&dir_path)).collect();
+        let mut error_lines: VecDeque<_> = line
+            .message
+            .spans
+            .iter()
+            .flat_map(|span| span.to_line_locs(&dir_path))
+            .collect();
         error_lines.extend(line.message.children.iter().flat_map(|child| {
             // NOTE: this diagnistic is apparently allowed to be recursive, but
             // I sort of doubt it in practice is ever. So I am not recurring.
-            child.spans.iter().flat_map(|span| span.to_line_locs(&dir_path))
+            child
+                .spans
+                .iter()
+                .flat_map(|span| span.to_line_locs(&dir_path))
         }));
         if let Some(first_error) = error_lines.front() {
-            let containing_fn_name = extract_function_name(&first_error.file, first_error.line)?.unwrap();
+            let containing_fn_name =
+                extract_function_name(&first_error.file, first_error.line)?.unwrap();
             println!("Function name is: {}", containing_fn_name);
             let short_hash = git_info.commit.to_string()[..7].to_string();
-            let error_name = format!("{}-{}-L{}",short_hash,containing_fn_name, first_error.line);
+            let error_name = format!(
+                "{}-{}-L{}",
+                short_hash, containing_fn_name, first_error.line
+            );
             let error_name_entry = error_name_numbers
                 .entry(error_name.clone())
                 // If there is already an error name tracked, update the number
@@ -76,8 +88,7 @@ fn main() -> Result<()> {
                 .or_insert(1);
             let full_error_name = format!("{}-{}", error_name, error_name_entry);
             println!("Error name: {}", full_error_name);
-        }
-        else {
+        } else {
             println!("No error lines found for the error:\n{}", rendered_message);
             println!("Skipping...");
             continue;
@@ -97,7 +108,12 @@ fn main() -> Result<()> {
         }
     }
 
-    let dir_name = args.dir.file_name().expect(&format!("Cannot get name for path {:?}", args.dir)).to_str().expect("Cannot render directory name as string");
+    let dir_name = args
+        .dir
+        .file_name()
+        .unwrap_or_else(|| panic!("Cannot get name for path {:?}", args.dir))
+        .to_str()
+        .expect("Cannot render directory name as string");
     let output_file_name = format!("{}-{}.json", dir_name, git_info.commit);
     println!("Saving output as {}", output_file_name);
 
@@ -118,12 +134,14 @@ fn gather_fix_info(app_state: &mut AppState) -> Result<()> {
 // Compile the regex lazily and globally (or within the function scope if preferred)
 // Using Lazy ensures it's compiled only once, safely across threads.
 static FUNC_DEF_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^\s*(?:pub(?:\(.*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+([a-zA-Z_][a-zA-Z0-9_]*)")
-        .expect("Failed to compile function definition regex")
-        // Adjusted regex slightly:
-        // - Added optional `async` keyword.
-        // - Added optional `pub(...)` visibility specifier.
-        // - Kept the core fn name capture group `([a-zA-Z_][a-zA-Z0-9_]*)`.
+    Regex::new(
+        r"^\s*(?:pub(?:\(.*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+    )
+    .expect("Failed to compile function definition regex")
+    // Adjusted regex slightly:
+    // - Added optional `async` keyword.
+    // - Added optional `pub(...)` visibility specifier.
+    // - Kept the core fn name capture group `([a-zA-Z_][a-zA-Z0-9_]*)`.
 });
 
 // // Define the struct to hold the results, similar to the Python dictionary
@@ -133,7 +151,6 @@ static FUNC_DEF_PATTERN: Lazy<Regex> = Lazy::new(|| {
 //     pub end: Option<usize>, // 1-based line number, optional as it might not be found
 //     pub name: String,
 // }
-
 
 /// Extracts the function name from the specified file at the given error line.
 ///
@@ -151,7 +168,6 @@ pub fn extract_function_name(
     file_path: &Path,
     error_line: usize, // Expect 1-based line number
 ) -> Result<Option<String>> {
-
     if !file_path.is_file() {
         // Using format! to create a String error message, then boxing it.
         bail!("Cannot find file for context extraction: {:?}", file_path);
@@ -165,9 +181,13 @@ pub fn extract_function_name(
 
     // Ensure error_line is within bounds (adjusting for 0-based index)
     if error_line == 0 || error_line > lines.len() {
-         // Or return Ok(None) if an out-of-bounds line just means no context
-         bail!("Error line {} is out of bounds for file {:?} ({} lines)",
-                    error_line, file_path, lines.len());
+        // Or return Ok(None) if an out-of-bounds line just means no context
+        bail!(
+            "Error line {} is out of bounds for file {:?} ({} lines)",
+            error_line,
+            file_path,
+            lines.len()
+        );
     }
 
     // let mut function_start_line: Option<usize> = None; // 1-based
@@ -211,7 +231,6 @@ pub fn extract_function_name(
     //         break;
     //     }
     // }
-
 
     // // Find the end of the function using brace counting
     // let mut function_end_line: Option<usize> = None;
