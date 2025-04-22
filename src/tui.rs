@@ -60,7 +60,7 @@ struct ConfirmationState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ExitIntent {
+pub enum ExitIntent {
     /// Quit the entire TUI
     Quit,
     /// Record the fix lines and do this error again
@@ -85,7 +85,7 @@ pub struct AppState {
     note: Option<String>,
     current_line: usize,  // 0-indexed line number currently selected/focused
     scroll_offset: usize, // 0-indexed line number at the top of the viewport
-    exit_intent: Option<ExitIntent>,
+    pub exit_intent: Option<ExitIntent>,
     syntax_set: SyntaxSet,
     theme: Theme,
     mode: AppMode,               // Current application mode

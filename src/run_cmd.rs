@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use git2::{ErrorCode, FetchOptions, FetchPrune, Oid, ReferenceType, RemoteCallbacks, Repository}; // Added FetchOptions, FetchPrune, RemoteCallbacks
+use git2::{ErrorCode, FetchOptions, FetchPrune, Oid, ReferenceType, RemoteCallbacks, Repository, Status, StatusOptions}; // Added FetchOptions, FetchPrune, RemoteCallbacks
 use log::{error, info, warn}; // Added error level
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -16,6 +16,7 @@ pub struct GitInformation {
     pub remote: Option<String>,
     pub branch: String,
     pub rel_path_from_root: PathBuf,
+    pub root_path: PathBuf,
 }
 
 impl fmt::Display for GitInformation {
@@ -196,6 +197,126 @@ fn fetch_all_remotes_prune(repo: &Repository) -> Result<()> {
     }
 }
 
+/// Represents the status results, including flags and file lists.
+#[derive(Debug, Default)]
+pub struct RepoStatusInfo {
+    pub uncommitted_files: Vec<String>,
+    pub untracked_files: Vec<String>,
+}
+
+/// Checks a Git repository for uncommitted changes and untracked files.
+///
+/// # Arguments
+///
+/// * `repo` - A reference to the `git2::Repository` to check.
+///
+/// # Returns
+///
+/// * `Ok(RepoStatusInfo)` - Contains boolean flags and lists of file paths
+///   relative to the repository root if the status check succeeds.
+/// * `Err(git2::Error)` - If there was an error accessing the repository status.
+pub fn check_repo_status(repo: &Repository) -> Result<RepoStatusInfo> {
+    // Configure status options:
+    // - Include untracked files.
+    // - Recurse into untracked directories to find nested untracked files.
+    // - Exclude submodules (can be changed if needed).
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .exclude_submodules(true); // Set to false if you want to check submodules status
+
+    // Get the status collection for the repository
+    let statuses = repo.statuses(Some(&mut opts))?;
+
+    // Define the status flags that indicate an "uncommitted change"
+    // This includes staged changes (INDEX_*) and unstaged changes (WT_*)
+    // excluding WT_NEW which we handle separately as "untracked".
+    const UNCOMMITTED_MASK: Status = Status::INDEX_NEW
+        .union(Status::INDEX_MODIFIED)
+        .union(Status::INDEX_DELETED)
+        .union(Status::INDEX_TYPECHANGE)
+        .union(Status::INDEX_RENAMED)
+        .union(Status::WT_MODIFIED)
+        .union(Status::WT_DELETED)
+        .union(Status::WT_TYPECHANGE)
+        .union(Status::WT_RENAMED);
+
+    let mut result = RepoStatusInfo::default();
+
+    // Iterate over the status entries
+    for entry in statuses.iter() {
+        let status = entry.status();
+        let path = match entry.path() {
+            Some(p) => p.to_string(),
+            None => continue, // Should typically not happen for status entries
+        };
+
+        // Check for untracked files
+        if status.contains(Status::WT_NEW) {
+            result.untracked_files.push(path.clone()); // Clone needed if also added below
+        }
+
+        // Check for uncommitted changes (staged or unstaged modifications/deletions/renames etc.)
+        // using the pre-defined mask.
+        if status.intersects(UNCOMMITTED_MASK) {
+            result.uncommitted_files.push(path);
+        }
+    }
+
+    // Sort the file lists for consistent output (optional)
+    result.uncommitted_files.sort();
+    result.untracked_files.sort();
+
+    Ok(result)
+}
+
+/// Prints a warning message to stdout if the repository status indicates
+/// uncommitted changes or untracked files.
+///
+/// # Arguments
+///
+/// * `status_info` - A reference to the `RepoStatusInfo` containing the status details.
+pub fn print_repo_status_warning(status_info: &RepoStatusInfo) {
+    let has_uncommitted_files = !status_info.uncommitted_files.is_empty();
+    let has_untracked_files = !status_info.untracked_files.is_empty();
+    // Only print the warning if there's something to warn about
+    if !has_uncommitted_files && !has_untracked_files {
+        return; // Nothing to warn about, exit early
+    }
+
+    // --- Construct the header message dynamically ---
+    let mut warning_parts = Vec::new();
+    if has_uncommitted_files {
+        warning_parts.push("uncommitted");
+    }
+    if has_untracked_files {
+        warning_parts.push("untracked");
+    }
+    let changes_description = warning_parts.join(" and ");
+    println!("WARNING: there are {} changes", changes_description);
+    // --- End of header construction ---
+
+
+    // --- Print Uncommitted Files ---
+    if has_uncommitted_files {
+        println!("  Uncommitted:");
+        for file in &status_info.uncommitted_files {
+            println!("     * {}", file);
+        }
+    }
+
+    // --- Print Untracked Files ---
+    if has_untracked_files {
+        println!("   Untracked:");
+        for file in &status_info.untracked_files {
+            println!("     * {}", file);
+        }
+    }
+
+    // --- Print the final line ---
+    println!("Running anyway...");
+}
+
 pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInformation)> {
     let canonical_directory = directory.canonicalize().with_context(|| {
         format!(
@@ -269,6 +390,9 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
             canonical_directory.display()
         )
     })?;
+
+    let status = check_repo_status(&repo)?;
+    print_repo_status_warning(&status);
 
     // Check if workdir exists early, as we need it for rel_path.
     // Fetch itself might work on bare repos, but our function requires workdir.
@@ -360,6 +484,7 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
         remote: remote_url, // Use the determined URL (or None)
         branch,
         rel_path_from_root,
+        root_path: repo_root.to_path_buf(),
     };
 
     Ok((stdout_lines, git_info))
@@ -445,12 +570,13 @@ pub struct RustSpan {
 }
 
 impl RustSpan {
-    pub fn to_line_locs(&self) -> Vec<LineLoc> {
-        let mut output = Vec::with_capacity(1 + self.line_end - self.line_start);
-        let file = Path::new(&self.file_name).to_path_buf();
-        let line = self.line_start;
+    pub fn to_line_locs(&self, repo_root: &PathBuf) -> Vec<LineLoc> {
+        let mut output = Vec::with_capacity(1 + self.line_end.saturating_sub(self.line_start));
+        let file = repo_root.join(Path::new(&self.file_name));
+        let mut line = self.line_start;
         while line <= self.line_end {
             output.push(LineLoc::new(line, file.clone()));
+            line += 1;
         }
         output
     }
