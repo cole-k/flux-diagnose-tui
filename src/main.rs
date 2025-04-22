@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{fmt::Write, path::Path};
 use anyhow::{Context, Result};
 use clap::Parser;
 use crossterm::{
@@ -26,6 +26,8 @@ use syntect::{
 use tui_input::{backend::crossterm::EventHandler, Input}; // Added tui-input
 use ratatui_explorer::FileExplorer;
 use serde::{Deserialize, Serialize};
+
+mod run_cmd;
 
 /// Simple File Viewer with Syntax Highlighting and Fix Input
 #[derive(Parser, Debug)]
@@ -343,6 +345,12 @@ fn main() -> Result<()> {
             println!("{:?}: {:?}", line_loc, fix);
         }
     }
+
+
+    let (lines, git_info) = run_cmd::run_flux_in_dir(Path::new("/Users/cole/git/flux-examples/kani-vecdeque"))?;
+
+    println!("{:?}", lines);
+    println!("Git info: {}", git_info);
 
     Ok(())
 }
