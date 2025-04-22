@@ -6,6 +6,8 @@ use std::fmt;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+use crate::tui::LineLoc;
 // Removed thread and Duration as we won't sleep after git2 fetch
 
 #[derive(Debug, Clone)]
@@ -204,7 +206,7 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
 
     // --- Run the main command ---
     info!(
-        "Running command: FLUX_FLAGS=\"-Fdebug-binder-output\" cargo flux in {}",
+        "Running command: FLUX_FLAGS=\"-Fdebug-binder-output\" cargo flux --message-format=json in {}",
         canonical_directory.display()
     );
     let command_desc = "cargo flux";
@@ -440,7 +442,18 @@ pub struct RustSpan {
     pub label: Option<String>, // Label displayed with the span, e.g., "a precondition cannot be proved"
     pub suggested_replacement: Option<String>, // Code suggestion
     pub suggestion_applicability: Option<String>, // e.g., "MachineApplicable", "HasPlaceholders", etc. (Could be Enum)
-                                                  // pub expansion: Option<serde_json::Value>, // Omitted for simplicity as requested (was null)
+}
+
+impl RustSpan {
+    pub fn to_line_locs(&self) -> Vec<LineLoc> {
+        let mut output = Vec::with_capacity(1 + self.line_end - self.line_start);
+        let file = Path::new(&self.file_name).to_path_buf();
+        let line = self.line_start;
+        while line <= self.line_end {
+            output.push(LineLoc::new(line, file.clone()));
+        }
+        output
+    }
 }
 
 // --- Text Highlight Structure (within Span) ---
