@@ -9,8 +9,9 @@ use std::{
 /// Represents the benchmark definitions for a single commit of a repository.
 #[derive(Debug)]
 pub struct BenchmarkSuite {
-    suite_path: PathBuf, // Path to repo_name/commit_hash/
+    suite_path: PathBuf, // Path to repo_name/subdir_name/commit_hash/
     repo_name: String,
+    subdir_name: String,
     commit_hash: String,
     git_info: Option<GitInformation>, // Loaded from git-info.json if it exists
 }
@@ -25,13 +26,15 @@ impl BenchmarkSuite {
     ///
     /// * `benchmarks_root`: The root directory containing all benchmark suites (e.g., `./benchmarks`).
     /// * `repo_name`: The logical name of the repository.
+    /// * `subdir_name`: The name of the subdirectory in the repo.
     /// * `commit_hash`: The full commit hash string.
     pub fn new(
         benchmarks_root: &Path,
         repo_name: &str,
+        subdir_name: &str,
         commit_hash: &str,
     ) -> Result<Self> {
-        let suite_path = benchmarks_root.join(repo_name).join(commit_hash);
+        let suite_path = benchmarks_root.join(repo_name).join(subdir_name).join(commit_hash);
         let git_info_path = suite_path.join("git-info.json");
 
         let git_info = if git_info_path.exists() {
@@ -48,6 +51,7 @@ impl BenchmarkSuite {
         Ok(Self {
             suite_path,
             repo_name: repo_name.to_string(),
+            subdir_name: subdir_name.to_string(),
             commit_hash: commit_hash.to_string(),
             git_info,
         })
@@ -176,8 +180,8 @@ impl BenchmarkSuite {
 
 
         println!(
-            "Successfully wrote benchmarks for {} at {}",
-            self.repo_name, self.commit_hash
+            "Successfully wrote benchmarks for {}/{} at {}",
+            self.repo_name, self.subdir_name, self.commit_hash
         );
         Ok(())
     }

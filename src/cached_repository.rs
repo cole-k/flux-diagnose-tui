@@ -22,50 +22,45 @@ pub struct CachedRepository<'a> {
 pub struct WorktreeGuard {
     repo_path: PathBuf,
     worktree_path: PathBuf,
-    is_temp: bool, // Was this worktree created temporarily?
 }
 
 impl Drop for WorktreeGuard {
     fn drop(&mut self) {
-        if self.is_temp {
-            println!("Cleaning up worktree: {:?}", self.worktree_path);
-            // Attempt to remove the worktree using the git command line
-            // git2's worktree support is limited, command line is often more robust here.
-            let status = Command::new("git")
-                .args(["-C", self.repo_path.to_str().unwrap()]) // Run in the main repo dir
-                .args(["worktree", "remove", "--force"]) // Force removal even if dirty
-                .arg(&self.worktree_path)
-                .status();
+        println!("Cleaning up worktree: {:?}", self.worktree_path);
+        // Attempt to remove the worktree using the git command line
+        // git2's worktree support is limited, command line is often more robust here.
+        let status = Command::new("git")
+            .args(["-C", self.repo_path.to_str().unwrap()]) // Run in the main repo dir
+            .args(["worktree", "remove", "--force"]) // Force removal even if dirty
+            .arg(&self.worktree_path)
+            .status();
 
-            match status {
-                Ok(s) if s.success() => {
-                    // Optionally, try removing the directory itself if git didn't
-                    let _ = fs::remove_dir_all(&self.worktree_path);
-                }
-                Ok(s) => {
-                    eprintln!(
-                        "Warning: Failed to remove worktree {:?} (exit code: {:?})",
-                        self.worktree_path,
-                        s.code()
-                    );
-                    // Consider attempting `rm -rf` as a last resort, but be careful
-                     if let Err(e) = fs::remove_dir_all(&self.worktree_path) {
-                         eprintln!("Warning: Failed to remove worktree directory {:?} forcefully: {}", self.worktree_path, e);
-                     }
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to execute git command to remove worktree {:?}: {}",
-                        self.worktree_path, e
-                    );
-                    // Consider attempting `rm -rf` as a last resort, but be careful
-                    if let Err(e) = fs::remove_dir_all(&self.worktree_path) {
-                         eprintln!("Warning: Failed to remove worktree directory {:?} forcefully: {}", self.worktree_path, e);
-                     }
-                }
+        match status {
+            Ok(s) if s.success() => {
+                // Optionally, try removing the directory itself if git didn't
+                let _ = fs::remove_dir_all(&self.worktree_path);
             }
-        } else {
-             println!("Skipping cleanup for non-temporary path: {:?}", self.worktree_path);
+            Ok(s) => {
+                eprintln!(
+                    "Warning: Failed to remove worktree {:?} (exit code: {:?})",
+                    self.worktree_path,
+                    s.code()
+                );
+                // Consider attempting `rm -rf` as a last resort, but be careful
+                    if let Err(e) = fs::remove_dir_all(&self.worktree_path) {
+                        eprintln!("Warning: Failed to remove worktree directory {:?} forcefully: {}", self.worktree_path, e);
+                    }
+            }
+            Err(e) => {
+                eprintln!(
+                    "Warning: Failed to execute git command to remove worktree {:?}: {}",
+                    self.worktree_path, e
+                );
+                // Consider attempting `rm -rf` as a last resort, but be careful
+                if let Err(e) = fs::remove_dir_all(&self.worktree_path) {
+                        eprintln!("Warning: Failed to remove worktree directory {:?} forcefully: {}", self.worktree_path, e);
+                    }
+            }
         }
     }
 }
@@ -106,7 +101,7 @@ impl<'a> CachedRepository<'a> {
         if let Some(local_repo_path) = self.local_resolver.resolve(repo_name, commit_hash) {
             println!("Found local path override: {:?}", local_repo_path);
             if local_repo_path.is_dir() {
-                match self.validate_and_create_worktree(local_repo_path, commit_hash, false) {
+                match self.validate_and_create_worktree(local_repo_path, commit_hash) {
                     Ok(result) => return Ok(result),
                     Err(e) => {
                         eprintln!(
@@ -141,7 +136,7 @@ impl<'a> CachedRepository<'a> {
              .with_context(|| format!("Failed to fetch commit {} in cache", commit_hash))?;
 
         // 3. Create worktree from cache
-        self.validate_and_create_worktree(&cached_repo_path, commit_hash, true) // is_temp = true for cached
+        self.validate_and_create_worktree(&cached_repo_path, commit_hash)
     }
 
     /// Ensures the repository exists in the cache, cloning if necessary.
@@ -230,7 +225,6 @@ impl<'a> CachedRepository<'a> {
         &self,
         repo_path: &Path,
         commit_hash: &str,
-        is_temp_worktree: bool // Should the guard clean this up?
     ) -> Result<(PathBuf, WorktreeGuard)> {
 
         let repo = git2::Repository::open(repo_path)
@@ -275,7 +269,6 @@ impl<'a> CachedRepository<'a> {
         let guard = WorktreeGuard {
             repo_path: repo_path.to_path_buf(),
             worktree_path: worktree_path.clone(),
-            is_temp: is_temp_worktree,
         };
 
         Ok((worktree_path, guard))

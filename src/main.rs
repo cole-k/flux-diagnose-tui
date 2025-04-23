@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
@@ -28,118 +28,185 @@ use benchmark_suite::BenchmarkSuite;
 use cached_repository::CachedRepository;
 use local_paths::LocalPathResolver;
 
-/// Simple File Viewer with Syntax Highlighting and Fix Input
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Args {
-    /// Path to the file to run flux in
-    dir: PathBuf,
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+#[derive(Subcommand, Clone)]
+enum Command {
+    /// Add benchmarks from DIR to BENCH_DIR by running `flux`
+    Add(AddArgs),
+    /// Edit benchmarks in BENCH_DIR
+    Edit(EditArgs),
+    /// Run `flux` against benchmarks in BENCH_DIR
+    Eval(EvalArgs),
+}
 
-    let (lines, git_info, repo_path) = run_cmd::run_flux_in_dir(&args.dir)?;
-
-    let dir_path = repo_path.join(git_info.subdir.clone());
-
-    println!("Git info: {}", git_info);
-
-    let mut error_name_numbers: HashMap<String, usize> = HashMap::new();
-
-    let mut error_and_fixes_map: HashMap<String, ErrorAndFixes> = HashMap::new();
-    for line in lines.into_iter() {
-        if line.message.level != "error" {
-            continue;
+impl Command {
+    fn run(&self) -> Result<()> {
+        match self {
+            Self::Add(args) => args.run(),
+            Self::Edit(args) => args.run(),
+            Self::Eval(args) => args.run(),
         }
-        // let rendered_message = line
-        //     .message
-        //     .rendered
-        //     .unwrap()
-        //     .lines()
-        //     // Skip the debug information
-        //     .filter(|line| !line.contains("constraint_debug_info"))
-        //     .collect::<Vec<&str>>()
-        //     .join("\n");
-        let rendered_message = line.message.rendered.clone().unwrap();
-        let mut error_lines: VecDeque<_> = line
-            .message
-            .spans
-            .iter()
-            .flat_map(|span| span.to_line_locs(&dir_path))
-            .collect();
-        error_lines.extend(line.message.children.iter().flat_map(|child| {
-            // NOTE: this diagnistic is apparently allowed to be recursive, but
-            // I sort of doubt it in practice is ever. So I am not recurring.
-            child
+    }
+}
+
+#[derive(Args, Clone)]
+struct AddArgs {
+    /// Directory to run `flux` in
+    dir: PathBuf,
+    /// Directory to write benchmarks to
+    bench_dir: PathBuf,
+    /// Edit any benchmark files that already exist.
+    /// By default existing benchmarks are skipped.
+    #[arg(short, long)]
+    edit_existing: bool,
+    /// Overwrite any benchmark files that already exist (requires
+    /// --edit_existing). By default the previous benchmark is loaded.
+    #[arg(short = 'f', long)]
+    overwrite_existing: bool,
+}
+
+impl AddArgs {
+    fn run(&self) -> Result<()> {
+        let (lines, git_info, repo_path) = run_cmd::run_flux_in_dir(&self.dir)?;
+
+        let dir_path = repo_path.join(git_info.subdir.clone());
+
+        println!("Git info: {}", git_info);
+
+        let mut error_name_numbers: HashMap<String, usize> = HashMap::new();
+
+        let mut error_and_fixes_map: HashMap<String, ErrorAndFixes> = HashMap::new();
+        for line in lines.into_iter() {
+            if line.message.level != "error" {
+                continue;
+            }
+            // let rendered_message = line
+            //     .message
+            //     .rendered
+            //     .unwrap()
+            //     .lines()
+            //     // Skip the debug information
+            //     .filter(|line| !line.contains("constraint_debug_info"))
+            //     .collect::<Vec<&str>>()
+            //     .join("\n");
+            let rendered_message = line.message.rendered.clone().unwrap();
+            let mut error_lines: VecDeque<_> = line
+                .message
                 .spans
                 .iter()
                 .flat_map(|span| span.to_line_locs(&dir_path))
-        }));
-        let full_error_name;
-        if let Some(first_error) = error_lines.front() {
-            let containing_fn_name =
-                extract_function_name(&first_error.file, first_error.line)?.unwrap();
-            println!("Function name is: {}", containing_fn_name);
-            let short_hash = git_info.commit[..7].to_string();
-            let error_name = format!(
-                "{}-{}-L{}",
-                short_hash, containing_fn_name, first_error.line
-            );
-            let error_name_entry = error_name_numbers
-                .entry(error_name.clone())
-                // If there is already an error name tracked, update the number
-                .and_modify(|n| *n += 1)
-                // Otherwise, this is the first
-                .or_insert(1);
-            full_error_name = format!("{}-{}", error_name, error_name_entry);
-            println!("Error name: {}", full_error_name);
-        } else {
-            println!("No error lines found for the error:\n{}", rendered_message);
-            println!("Skipping...");
-            continue;
-        }
-        let mut app_state = AppState::new(rendered_message, error_lines)?;
-        gather_fix_info(&mut app_state)?;
-        if let Some(ExitIntent::Quit) = app_state.exit_intent {
-            break;
-        }
-        error_and_fixes_map
-            .entry(full_error_name)
-            .and_modify(|_e| {
-                // TODO: Add fix
-                //e.fixes.push(fix)
-            })
-            .or_insert_with_key(|error_name| {
-                ErrorAndFixes {
-                    error_name: error_name.clone(),
-                    error: line.clone(),
+                .collect();
+            error_lines.extend(line.message.children.iter().flat_map(|child| {
+                // NOTE: this diagnistic is apparently allowed to be recursive, but
+                // I sort of doubt it in practice is ever. So I am not recurring.
+                child
+                    .spans
+                    .iter()
+                    .flat_map(|span| span.to_line_locs(&dir_path))
+            }));
+            let full_error_name;
+            if let Some(first_error) = error_lines.front() {
+                let containing_fn_name =
+                    extract_function_name(&first_error.file, first_error.line)?.unwrap();
+                println!("Function name is: {}", containing_fn_name);
+                let short_hash = git_info.commit[..7].to_string();
+                let error_name = format!(
+                    "{}-{}-L{}",
+                    short_hash, containing_fn_name, first_error.line
+                );
+                let error_name_entry = error_name_numbers
+                    .entry(error_name.clone())
+                    // If there is already an error name tracked, update the number
+                    .and_modify(|n| *n += 1)
+                    // Otherwise, this is the first
+                    .or_insert(1);
+                full_error_name = format!("{}-{}", error_name, error_name_entry);
+                println!("Error name: {}", full_error_name);
+            } else {
+                println!("No error lines found for the error:\n{}", rendered_message);
+                println!("Skipping...");
+                continue;
+            }
+            let mut app_state = AppState::new(rendered_message, error_lines)?;
+            gather_fix_info(&mut app_state)?;
+            if let Some(ExitIntent::Quit) = app_state.exit_intent {
+                break;
+            }
+            error_and_fixes_map
+                .entry(full_error_name)
+                .and_modify(|_e| {
                     // TODO: Add fix
-                    fixes: vec!(),
+                    //e.fixes.push(fix)
+                })
+                .or_insert_with_key(|error_name| {
+                    ErrorAndFixes {
+                        error_name: error_name.clone(),
+                        error: line.clone(),
+                        // TODO: Add fix
+                        fixes: vec!(),
+                    }
+                });
+            if !app_state.fix_lines.is_empty() {
+                println!("Fixes proposed:");
+                let mut sorted_fixes: Vec<_> = app_state.fix_lines.iter().collect();
+                sorted_fixes.sort_by_key(|(k, _)| *k);
+                for (line_loc, fix) in sorted_fixes {
+                    println!("{:?}: {:?}", line_loc, fix);
                 }
-            });
-        if !app_state.fix_lines.is_empty() {
-            println!("Fixes proposed:");
-            let mut sorted_fixes: Vec<_> = app_state.fix_lines.iter().collect();
-            sorted_fixes.sort_by_key(|(k, _)| *k);
-            for (line_loc, fix) in sorted_fixes {
-                println!("{:?}: {:?}", line_loc, fix);
             }
         }
+
+        run_benchmark_update(&git_info, &repo_path, &error_and_fixes_map.into_values().collect())?;
+
+        Ok(())
     }
+}
 
-    let dir_name = args
-        .dir
-        .file_name()
-        .unwrap_or_else(|| panic!("Cannot get name for path {:?}", args.dir))
-        .to_str()
-        .expect("Cannot render directory name as string");
-    let output_file_name = format!("{}-{}.json", dir_name, git_info.commit);
-    println!("Saving output as {}", output_file_name);
+#[derive(Args, Clone)]
+struct EditArgs {
+    /// Directory to read/write benchmarks from
+    bench_dir: PathBuf,
+    #[command(flatten)]
+    benchmarks: BenchmarkArgs,
+}
 
-    run_benchmark_update(&git_info, &repo_path, &error_and_fixes_map.into_values().collect())?;
+impl EditArgs {
+    fn run(&self) -> Result<()> {
+        Ok(())
+    }
+}
 
-    Ok(())
+#[derive(Args, Clone)]
+struct EvalArgs {
+    /// Directory to eval benchmarks on
+    bench_dir: PathBuf,
+    #[command(flatten)]
+    benchmarks: BenchmarkArgs,
+}
+
+impl EvalArgs {
+    fn run(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Parser, Clone)]
+struct BenchmarkArgs {
+    /// A list of strings that select benchmarks matching either: the name of a
+    /// repo (exactly), the name of a subdirectory (exactly), or the name of a
+    /// commit (7 char or more prefix).
+    benchmarks: Vec<String>,
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+    cli.command.run()
 }
 
 fn gather_fix_info(app_state: &mut AppState) -> Result<()> {
@@ -302,8 +369,8 @@ pub fn extract_function_name(
 // This function makes sense for the benchmarks runner to use.
 // The benchmark saver should probably just stick to looking in the benchmark suite.
 fn run_benchmark_update(git_info: &GitInformation, repo_path: &Path, errors: &Vec<ErrorAndFixes>) -> Result<()> {
-    let benchmarks_root = PathBuf::from("./my_benchmarks");
-    let cache_root = PathBuf::from("./.benchmark-cache"); // Example cache location
+    let benchmarks_root = PathBuf::from("./my_benchmarks").canonicalize()?;
+    let cache_root = PathBuf::from("./.benchmark-cache").canonicalize()?; // Example cache location
     let local_paths_config = benchmarks_root.parent().unwrap_or(&benchmarks_root).join(".localpaths.toml");
 
     // --- Setup ---
@@ -323,8 +390,9 @@ fn run_benchmark_update(git_info: &GitInformation, repo_path: &Path, errors: &Ve
 
 
     // --- Instantiate Benchmark Suite ---
+    let subdir_name = git_info.subdir.file_name().unwrap().to_string_lossy();
     // Creates an object representing the suite on disk, tries to load git-info.json
-    let mut suite = BenchmarkSuite::new(&benchmarks_root, &git_info.repo_name, &git_info.commit)?;
+    let mut suite = BenchmarkSuite::new(&benchmarks_root, &git_info.repo_name, &subdir_name, &git_info.commit)?;
 
 
     // Load existing benchmarks/annotations for this suite
