@@ -1,6 +1,10 @@
-use std::{collections::VecDeque, fmt, path::{Path, PathBuf}};
+use std::{
+    collections::VecDeque,
+    fmt,
+    path::{Path, PathBuf},
+};
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct LineLoc {
@@ -73,7 +77,10 @@ impl fmt::Display for GitInformation {
             "Commit: {}, Branch: {}, Remote: {}, Relative Path: {}",
             &self.commit[..7],
             self.branch,
-            self.remote.clone().map(|remote| format!("{} (URL: {})", remote.remote_name, remote.remote_url)).unwrap_or("<none>".to_string()),
+            self.remote
+                .clone()
+                .map(|remote| format!("{} (URL: {})", remote.remote_name, remote.remote_url))
+                .unwrap_or("<none>".to_string()),
             self.subdir.display()
         )
     }
@@ -160,7 +167,9 @@ impl RustSpan {
     pub fn to_line_locs(&self, repo_root: Option<&Path>) -> Vec<LineLoc> {
         let mut output = Vec::with_capacity(1 + self.line_end.saturating_sub(self.line_start));
         // If we don't get a root, we'll keep the path relative.
-        let file = repo_root.unwrap_or(Path::new("")).join(Path::new(&self.file_name));
+        let file = repo_root
+            .unwrap_or(Path::new(""))
+            .join(Path::new(&self.file_name));
         let mut line = self.line_start;
         while line <= self.line_end {
             output.push(LineLoc::new(line, file.clone()));
@@ -206,11 +215,14 @@ fn convert_ssh_to_https(url_str: &str) -> String {
     // 2. Check for local paths (simple check for common cases)
     // If it looks like a file path, don't try to convert it.
     // This is a basic check and might not cover all edge cases.
-     if Path::new(trimmed_url).is_absolute() || trimmed_url.starts_with('.') || trimmed_url.starts_with('/') || trimmed_url.contains('\\') {
+    if Path::new(trimmed_url).is_absolute()
+        || trimmed_url.starts_with('.')
+        || trimmed_url.starts_with('/')
+        || trimmed_url.contains('\\')
+    {
         // Heuristic: Looks like a local path, return as is.
-         return trimmed_url.to_string();
-     }
-
+        return trimmed_url.to_string();
+    }
 
     // 3. Handle the common SCP-like syntax: [user@]host.xz:path/to/repo.git
     // Example: git@github.com:owner/repo.git
@@ -218,8 +230,8 @@ fn convert_ssh_to_https(url_str: &str) -> String {
     // It must exist and not be part of a scheme like `file:///` (already excluded by http check)
     // or immediately after the start like `C:` (partially covered by path check)
     if let Some(colon_pos) = trimmed_url.find(':') {
-         // Ensure ':' is not the first character and there's something after it
-         if colon_pos > 0 && colon_pos < trimmed_url.len() - 1 {
+        // Ensure ':' is not the first character and there's something after it
+        if colon_pos > 0 && colon_pos < trimmed_url.len() - 1 {
             // Check that it doesn't contain '/' immediately after the ':', which would indicate a scheme or path
             if &trimmed_url[colon_pos + 1..colon_pos + 2] != "/" {
                 // Check if there's an '@' sign before the ':'
@@ -248,9 +260,8 @@ fn convert_ssh_to_https(url_str: &str) -> String {
                     return new_url;
                 }
             }
-         }
+        }
     }
-
 
     // 4. Handle the ssh:// scheme explicitly if present
     // Example: ssh://git@github.com/owner/repo.git
@@ -258,9 +269,9 @@ fn convert_ssh_to_https(url_str: &str) -> String {
         if let Some(at_pos) = rest.find('@') {
             // Find the first '/' *after* the '@'
             if let Some(slash_pos) = rest[(at_pos + 1)..].find('/') {
-                 let full_slash_pos = at_pos + 1 + slash_pos;
-                 // Ensure '@' comes before '/'
-                 if at_pos < full_slash_pos {
+                let full_slash_pos = at_pos + 1 + slash_pos;
+                // Ensure '@' comes before '/'
+                if at_pos < full_slash_pos {
                     let host_and_path = &rest[(at_pos + 1)..];
                     let new_url = format!("https://{}", host_and_path);
                     eprintln!(
@@ -277,7 +288,6 @@ fn convert_ssh_to_https(url_str: &str) -> String {
         // Or attempt a simple scheme swap? Let's return original for now if pattern fails.
         // return format!("https://{}", rest); // Alternative: simple scheme swap
     }
-
 
     // If none of the patterns matched, return the original URL
     trimmed_url.to_string()

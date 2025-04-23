@@ -6,7 +6,8 @@ use git2::{
 }; // Added FetchOptions, FetchPrune, RemoteCallbacks
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
-use regex::Regex; use std::collections::{HashMap, VecDeque};
+use regex::Regex;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 // Added error level
 use std::io::{BufRead, BufReader};
@@ -53,7 +54,10 @@ fn find_remote_containing_commit(repo: &Repository, commit_oid: Oid) -> Result<O
                             match repo.find_remote(remote_name) {
                                 Ok(remote) => {
                                     if let Some(url) = remote.url() {
-                                        return Ok(Some(RemoteInfo::new(remote_name.to_string(), url.to_string())));
+                                        return Ok(Some(RemoteInfo::new(
+                                            remote_name.to_string(),
+                                            url.to_string(),
+                                        )));
                                     } else {
                                         warn!(
                                             "Remote '{}' (from ref '{}') has no URL configured.",
@@ -472,10 +476,7 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<ErrorAndFixes>, GitInfor
         error_lines.extend(error.message.children.iter().flat_map(|child| {
             // NOTE: this diagnostic is apparently allowed to be recursive, but
             // I sort of doubt it in practice is ever. So I am not recurring.
-            child
-                .spans
-                .iter()
-                .flat_map(|span| span.to_line_locs(None))
+            child.spans.iter().flat_map(|span| span.to_line_locs(None))
         }));
         if let Some(first_error) = error_lines.front() {
             let containing_fn_name =
@@ -499,9 +500,9 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<ErrorAndFixes>, GitInfor
                 error_name: full_error_name,
                 error,
                 // No fixes yet
-                fixes: vec!(),
+                fixes: vec![],
                 // NOTE: The paths in these must be relative
-                error_lines
+                error_lines,
             });
         }
     }
@@ -531,7 +532,6 @@ static FUNC_DEF_PATTERN: Lazy<Regex> = Lazy::new(|| {
     // - Added optional `pub(...)` visibility specifier.
     // - Kept the core fn name capture group `([a-zA-Z_][a-zA-Z0-9_]*)`.
 });
-
 
 /// Extracts the function name from the specified file at the given error line.
 ///

@@ -34,16 +34,28 @@ impl BenchmarkSuite {
         subdir: &Path,
         commit_hash: &str,
     ) -> Result<Self> {
-        let subdir_name = subdir.file_name().ok_or_else(|| anyhow!("Cannot get name of Subdirectory {:?}", subdir))?.to_string_lossy();
-        let suite_path = benchmarks_root.join(repo_name).join(subdir).join(commit_hash);
+        let subdir_name = subdir
+            .file_name()
+            .ok_or_else(|| anyhow!("Cannot get name of Subdirectory {:?}", subdir))?
+            .to_string_lossy();
+        let suite_path = benchmarks_root
+            .join(repo_name)
+            .join(subdir)
+            .join(commit_hash);
         let git_info_path = suite_path.join("git-info.json");
 
         let git_info = if git_info_path.exists() {
             let content = fs::read_to_string(&git_info_path).with_context(|| {
-                format!("Failed to read existing git-info.json at {:?}", git_info_path)
+                format!(
+                    "Failed to read existing git-info.json at {:?}",
+                    git_info_path
+                )
             })?;
             Some(serde_json::from_str(&content).with_context(|| {
-                format!("Failed to parse existing git-info.json at {:?}", git_info_path)
+                format!(
+                    "Failed to parse existing git-info.json at {:?}",
+                    git_info_path
+                )
             })?)
         } else {
             None
@@ -79,7 +91,10 @@ impl BenchmarkSuite {
         }
 
         let entries = fs::read_dir(&self.suite_path).with_context(|| {
-            format!("Failed to read benchmark suite directory: {:?}", self.suite_path)
+            format!(
+                "Failed to read benchmark suite directory: {:?}",
+                self.suite_path
+            )
         })?;
 
         for entry_res in entries {
@@ -87,8 +102,9 @@ impl BenchmarkSuite {
             let path = entry.path();
 
             if path.is_file()
-                && path.extension().map_or(false, |ext| ext == "json")
-                && path.file_name().map_or(false, |name| name != "git-info.json")
+                && path.extension().is_some_and(|ext| ext == "json")
+                && path
+                    .file_name().is_some_and(|name| name != "git-info.json")
             {
                 let content = fs::read_to_string(&path)
                     .with_context(|| format!("Failed to read benchmark file: {:?}", path))?;
@@ -100,9 +116,8 @@ impl BenchmarkSuite {
         Ok(benchmarks)
     }
 
-
     /// Loads a single benchmark definition by its error name.
-     pub fn load_single_benchmark(&self, error_name: &str) -> Result<Option<ErrorAndFixes>> {
+    pub fn load_single_benchmark(&self, error_name: &str) -> Result<Option<ErrorAndFixes>> {
         let filename = format!("{}.json", error_name);
         let file_path = self.suite_path.join(&filename);
 
@@ -115,8 +130,7 @@ impl BenchmarkSuite {
         let benchmark: ErrorAndFixes = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse benchmark file: {:?}", file_path))?;
         Ok(Some(benchmark))
-     }
-
+    }
 
     /// Writes the complete set of benchmark definitions to the suite directory,
     /// overwriting existing files.
@@ -142,13 +156,12 @@ impl BenchmarkSuite {
 
         // 2. Create/Update git-info.json
         let git_info_path = self.suite_path.join("git-info.json");
-        let git_info_json = serde_json::to_string_pretty(&git_info)
-            .context("Failed to serialize git-info.json")?;
+        let git_info_json =
+            serde_json::to_string_pretty(&git_info).context("Failed to serialize git-info.json")?;
         fs::write(&git_info_path, git_info_json)
             .with_context(|| format!("Failed to write git-info.json to {:?}", git_info_path))?;
         // Update the cached version in self
         self.git_info = Some(git_info.clone());
-
 
         // 3. Write benchmark files (Consider removing old ones first?)
         // Simplest approach: just write, overwriting existing ones.
@@ -179,7 +192,6 @@ impl BenchmarkSuite {
         )
         .context("Failed to record local path override")?;
 
-
         println!(
             "Successfully wrote benchmarks for {}/{} at {}",
             self.repo_name, self.subdir_name, self.commit_hash
@@ -187,10 +199,12 @@ impl BenchmarkSuite {
         Ok(())
     }
 
-     // Optional helper to remove .json files not in the current benchmark list
+    // Optional helper to remove .json files not in the current benchmark list
     #[allow(dead_code)] // Remove if used
     fn cleanup_stale_files(&self, current_benchmarks: &[ErrorAndFixes]) -> Result<()> {
-        if !self.suite_path.exists() { return Ok(()); }
+        if !self.suite_path.exists() {
+            return Ok(());
+        }
 
         let current_files: std::collections::HashSet<String> = current_benchmarks
             .iter()
@@ -198,7 +212,10 @@ impl BenchmarkSuite {
             .collect();
 
         let entries = fs::read_dir(&self.suite_path).with_context(|| {
-            format!("Failed to read suite directory for cleanup: {:?}", self.suite_path)
+            format!(
+                "Failed to read suite directory for cleanup: {:?}",
+                self.suite_path
+            )
         })?;
 
         for entry_res in entries {
@@ -206,16 +223,15 @@ impl BenchmarkSuite {
             let path = entry.path();
             if path.is_file() {
                 if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    if filename.ends_with(".json") && filename != "git-info.json" {
-                        if !current_files.contains(filename) {
-                            println!("Removing stale benchmark file: {:?}", path);
-                            fs::remove_file(&path).with_context(|| format!("Failed to remove stale file: {:?}", path))?;
-                        }
+                    if filename.ends_with(".json") && filename != "git-info.json" && !current_files.contains(filename) {
+                        println!("Removing stale benchmark file: {:?}", path);
+                        fs::remove_file(&path).with_context(|| {
+                            format!("Failed to remove stale file: {:?}", path)
+                        })?;
                     }
                 }
             }
         }
         Ok(())
     }
-
 }

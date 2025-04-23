@@ -1,3 +1,4 @@
+use crate::types::{ErrorAndFixes, Fix, FixLine, LineLoc};
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -5,7 +6,6 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap}, // Added Clear
 };
 use ratatui_explorer::FileExplorer;
-use std::{fmt::Write, path::Path};
 use std::{
     collections::{BTreeMap, VecDeque},
     fs::File,
@@ -13,12 +13,12 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
+use std::{fmt::Write, path::Path};
 use syntect::{
     easy::HighlightLines,
     highlighting::{Theme, ThemeSet},
     parsing::SyntaxSet,
 };
-use crate::types::{ErrorAndFixes, Fix, FixLine, LineLoc};
 use tui_input::{backend::crossterm::EventHandler, Input}; // Added tui-input
 use unicode_width::UnicodeWidthStr;
 
@@ -126,12 +126,15 @@ impl AppState {
         // fixes getting swallowed.
         let fix_lines = if let Some(fix) = error_and_fixes.fixes.first() {
             fix.fix_lines
-               .iter()
-               .map(|fix_line| {
-                   let absolute_path = dir_path.join(&fix_line.file);
-                   (LineLoc::new(fix_line.line, absolute_path), fix_line.added_reft.clone())
-               })
-               .collect()
+                .iter()
+                .map(|fix_line| {
+                    let absolute_path = dir_path.join(&fix_line.file);
+                    (
+                        LineLoc::new(fix_line.line, absolute_path),
+                        fix_line.added_reft.clone(),
+                    )
+                })
+                .collect()
         } else {
             BTreeMap::new()
         };
@@ -363,18 +366,21 @@ impl AppState {
     }
 
     pub fn fixes(&self, dir_path: &Path) -> Result<Fix> {
-        let fix_lines = self.fix_lines.iter()
+        let fix_lines = self
+            .fix_lines
+            .iter()
             .map(|(line_loc, fix)| {
                 Ok::<FixLine, anyhow::Error>(FixLine {
                     line: line_loc.line,
                     // Make the lines relative to the directory we run in
                     // This is the convention we adopt for saving other files.
-                    file: pathdiff::diff_paths(&line_loc.file, dir_path)
-                        .ok_or_else(|| anyhow::anyhow!("Couldn't diff path {:?} and {:?}", dir_path, line_loc.file)
-                    )?,
+                    file: pathdiff::diff_paths(&line_loc.file, dir_path).ok_or_else(|| {
+                        anyhow::anyhow!("Couldn't diff path {:?} and {:?}", dir_path, line_loc.file)
+                    })?,
                     added_reft: fix.clone(),
                 })
-            }).collect::<Result<_>>()?;
+            })
+            .collect::<Result<_>>()?;
         Ok(Fix {
             fix_lines,
             note: self.note.clone(),

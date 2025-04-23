@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
     sync::Mutex, // Use Mutex for simple write synchronization
 };
-use serde::{Serialize,Deserialize};
 
 // Static mutex to prevent race conditions if multiple generations happen concurrently
 // In a real app, consider more robust locking or a dedicated config actor.
@@ -47,7 +47,10 @@ impl LocalPathResolver {
         } else {
             LocalPathsConfig::default()
         };
-        Ok(Self { config_path, config })
+        Ok(Self {
+            config_path,
+            config,
+        })
     }
 
     /// Saves the current configuration back to the file.
@@ -60,22 +63,22 @@ impl LocalPathResolver {
 
         // Ensure parent directory exists
         if let Some(parent) = self.config_path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create parent directory for config: {:?}", parent))?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create parent directory for config: {:?}", parent)
+            })?;
         }
 
-        fs::write(&self.config_path, content)
-            .with_context(|| format!("Failed to write local paths config to {:?}", self.config_path))?;
+        fs::write(&self.config_path, content).with_context(|| {
+            format!(
+                "Failed to write local paths config to {:?}",
+                self.config_path
+            )
+        })?;
         Ok(())
     }
 
     /// Adds or updates a commit-specific local path override.
-    pub fn add_commit_override(
-        &mut self,
-        repo_name: &str,
-        commit_hash: &str,
-        local_path: &Path,
-    ) {
+    pub fn add_commit_override(&mut self, repo_name: &str, commit_hash: &str, local_path: &Path) {
         self.config
             .repositories
             .entry(repo_name.to_string())
@@ -84,12 +87,8 @@ impl LocalPathResolver {
             .insert(commit_hash.to_string(), local_path.to_path_buf());
     }
 
-     /// Adds or updates the default local path override for a repo.
-     pub fn add_default_override(
-        &mut self,
-        repo_name: &str,
-        local_path: &Path,
-    ) {
+    /// Adds or updates the default local path override for a repo.
+    pub fn add_default_override(&mut self, repo_name: &str, local_path: &Path) {
         self.config
             .repositories
             .entry(repo_name.to_string())
@@ -97,17 +96,21 @@ impl LocalPathResolver {
             .default_path = Some(local_path.to_path_buf());
     }
 
-
     /// Resolves the local path for a given repo and commit.
     /// Checks commit-specific path first, then the repo's default path.
     /// Returns None if no override is found in the config.
     pub fn resolve(&self, repo_name: &str, commit_hash: &str) -> Option<&PathBuf> {
-        self.config.repositories.get(repo_name).and_then(|repo_paths| {
-            // 1. Check specific commit path
-            repo_paths.commit_paths.get(commit_hash)
-                // 2. Check default path for the repo
-                .or(repo_paths.default_path.as_ref())
-        })
+        self.config
+            .repositories
+            .get(repo_name)
+            .and_then(|repo_paths| {
+                // 1. Check specific commit path
+                repo_paths
+                    .commit_paths
+                    .get(commit_hash)
+                    // 2. Check default path for the repo
+                    .or(repo_paths.default_path.as_ref())
+            })
     }
 
     /// Method used by the *generator* to add the currently used path
