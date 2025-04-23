@@ -103,7 +103,7 @@ impl AddArgs {
                         break;
                     }
                     Some(ExitIntent::SaveAndNext) | Some(ExitIntent::SaveAndRedo) => {
-                        let fix = app_state.fixes(&repo_path)?;
+                        let fix = app_state.fixes(&dir_path)?;
                         error_and_fixes_map
                             .entry(error_and_fixes.error_name.clone())
                             .and_modify(|e| {

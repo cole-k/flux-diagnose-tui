@@ -347,13 +347,15 @@ impl AppState {
         Ok(())
     }
 
-    pub fn fixes(&self, repo_root: &Path) -> Result<Fix> {
+    pub fn fixes(&self, dir_path: &Path) -> Result<Fix> {
         let fix_lines = self.fix_lines.iter()
             .map(|(line_loc, fix)| {
                 Ok::<FixLine, anyhow::Error>(FixLine {
                     line: line_loc.line,
-                    file: pathdiff::diff_paths(&line_loc.file, repo_root)
-                        .ok_or_else(|| anyhow::anyhow!("Couldn't diff path {:?} and {:?}", repo_root, line_loc.file)
+                    // Make the lines relative to the directory we run in
+                    // This is the convention we adopt for saving other files.
+                    file: pathdiff::diff_paths(&line_loc.file, dir_path)
+                        .ok_or_else(|| anyhow::anyhow!("Couldn't diff path {:?} and {:?}", dir_path, line_loc.file)
                     )?,
                     added_reft: fix.clone(),
                 })
