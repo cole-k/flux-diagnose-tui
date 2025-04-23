@@ -5,7 +5,6 @@ use crossterm::{
     ExecutableCommand,
 };
 use ratatui::prelude::*;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
     fs::File,
@@ -18,8 +17,16 @@ use regex::Regex;
 
 mod run_cmd;
 mod tui;
+mod local_paths;
+mod benchmark_suite;
+mod cached_repository;
+mod types;
 
 use tui::{run_app, AppState, ExitIntent};
+use types::{ErrorAndFixes, GitInformation};
+use benchmark_suite::BenchmarkSuite;
+use cached_repository::CachedRepository;
+use local_paths::LocalPathResolver;
 
 /// Simple File Viewer with Syntax Highlighting and Fix Input
 #[derive(Parser, Debug)]
@@ -29,20 +36,18 @@ struct Args {
     dir: PathBuf,
 }
 
-#[derive(Serialize, Deserialize)]
-struct ErrorAndFixes {}
-
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let (lines, git_info) = run_cmd::run_flux_in_dir(&args.dir)?;
+    let (lines, git_info, repo_path) = run_cmd::run_flux_in_dir(&args.dir)?;
 
-    let dir_path = git_info.root_path.join(git_info.rel_path_from_root.clone());
+    let dir_path = repo_path.join(git_info.subdir.clone());
 
     println!("Git info: {}", git_info);
 
     let mut error_name_numbers: HashMap<String, usize> = HashMap::new();
 
+    let mut error_and_fixes_map: HashMap<String, ErrorAndFixes> = HashMap::new();
     for line in lines.into_iter() {
         if line.message.level != "error" {
             continue;
@@ -56,7 +61,7 @@ fn main() -> Result<()> {
         //     .filter(|line| !line.contains("constraint_debug_info"))
         //     .collect::<Vec<&str>>()
         //     .join("\n");
-        let rendered_message = line.message.rendered.unwrap();
+        let rendered_message = line.message.rendered.clone().unwrap();
         let mut error_lines: VecDeque<_> = line
             .message
             .spans
@@ -71,11 +76,12 @@ fn main() -> Result<()> {
                 .iter()
                 .flat_map(|span| span.to_line_locs(&dir_path))
         }));
+        let full_error_name;
         if let Some(first_error) = error_lines.front() {
             let containing_fn_name =
                 extract_function_name(&first_error.file, first_error.line)?.unwrap();
             println!("Function name is: {}", containing_fn_name);
-            let short_hash = git_info.commit.to_string()[..7].to_string();
+            let short_hash = git_info.commit[..7].to_string();
             let error_name = format!(
                 "{}-{}-L{}",
                 short_hash, containing_fn_name, first_error.line
@@ -86,7 +92,7 @@ fn main() -> Result<()> {
                 .and_modify(|n| *n += 1)
                 // Otherwise, this is the first
                 .or_insert(1);
-            let full_error_name = format!("{}-{}", error_name, error_name_entry);
+            full_error_name = format!("{}-{}", error_name, error_name_entry);
             println!("Error name: {}", full_error_name);
         } else {
             println!("No error lines found for the error:\n{}", rendered_message);
@@ -98,6 +104,20 @@ fn main() -> Result<()> {
         if let Some(ExitIntent::Quit) = app_state.exit_intent {
             break;
         }
+        error_and_fixes_map
+            .entry(full_error_name)
+            .and_modify(|_e| {
+                // TODO: Add fix
+                //e.fixes.push(fix)
+            })
+            .or_insert_with_key(|error_name| {
+                ErrorAndFixes {
+                    error_name: error_name.clone(),
+                    error: line.clone(),
+                    // TODO: Add fix
+                    fixes: vec!(),
+                }
+            });
         if !app_state.fix_lines.is_empty() {
             println!("Fixes proposed:");
             let mut sorted_fixes: Vec<_> = app_state.fix_lines.iter().collect();
@@ -116,6 +136,8 @@ fn main() -> Result<()> {
         .expect("Cannot render directory name as string");
     let output_file_name = format!("{}-{}.json", dir_name, git_info.commit);
     println!("Saving output as {}", output_file_name);
+
+    run_benchmark_update(&git_info, &repo_path, &error_and_fixes_map.into_values().collect())?;
 
     Ok(())
 }
@@ -275,4 +297,48 @@ pub fn extract_function_name(
     //     end: function_end_line,     // 1-based, or None if not found
     //     name: fn_name,
     // }))
+}
+
+// This function makes sense for the benchmarks runner to use.
+// The benchmark saver should probably just stick to looking in the benchmark suite.
+fn run_benchmark_update(git_info: &GitInformation, repo_path: &Path, errors: &Vec<ErrorAndFixes>) -> Result<()> {
+    let benchmarks_root = PathBuf::from("./my_benchmarks");
+    let cache_root = PathBuf::from("./.benchmark-cache"); // Example cache location
+    let local_paths_config = benchmarks_root.parent().unwrap_or(&benchmarks_root).join(".localpaths.toml");
+
+    // --- Setup ---
+    let mut local_resolver = LocalPathResolver::load(local_paths_config.clone())?;
+    local_resolver.add_commit_override(&git_info.repo_name, &git_info.commit, repo_path);
+    local_resolver.save()?;
+    let cache_repo = CachedRepository::new(cache_root, &local_resolver);
+
+    // --- Get Code Directory (Runner's Responsibility) ---
+    println!("Getting code directory...");
+    let (worktree_path, _guard) = cache_repo.get_worktree(
+        &git_info.repo_name,
+        &git_info.commit,
+        &git_info.remote,
+    )?;
+    println!("Code available at temporary worktree: {:?}", worktree_path);
+
+
+    // --- Instantiate Benchmark Suite ---
+    // Creates an object representing the suite on disk, tries to load git-info.json
+    let mut suite = BenchmarkSuite::new(&benchmarks_root, &git_info.repo_name, &git_info.commit)?;
+
+
+    // Load existing benchmarks/annotations for this suite
+    println!("Loading existing annotations...");
+    let _existing_benchmarks = suite.load_benchmarks().unwrap_or_default();
+
+    // --- Write Updated Benchmarks Back ---
+    // This saves the *.json files, updates git-info.json, and records the
+    // local path override in .localpaths.toml
+    println!("Writing updated benchmarks...");
+    suite.write_benchmarks(errors, git_info, &local_resolver, repo_path)?;
+
+    // _guard goes out of scope here, automatically cleaning up the worktree
+    println!("Worktree guard dropped, cleanup attempted.");
+
+    Ok(())
 }

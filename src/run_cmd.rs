@@ -1,43 +1,19 @@
+use crate::types::{CompilerMessage, GitInformation, RemoteInfo};
 use anyhow::{bail, Context, Result};
 use git2::{
     ErrorCode, FetchOptions, FetchPrune, Oid, ReferenceType, RemoteCallbacks, Repository, Status,
     StatusOptions,
 }; // Added FetchOptions, FetchPrune, RemoteCallbacks
 use log::{error, info, warn}; // Added error level
-use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::tui::LineLoc;
 // Removed thread and Duration as we won't sleep after git2 fetch
-
-#[derive(Debug, Clone)]
-pub struct GitInformation {
-    pub commit: Oid,
-    pub remote: Option<String>,
-    pub branch: String,
-    pub rel_path_from_root: PathBuf,
-    pub root_path: PathBuf,
-}
-
-impl fmt::Display for GitInformation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Commit: {}, Branch: {}, Remote: {}, Relative Path: {}",
-            &self.commit.to_string()[..7],
-            self.branch,
-            self.remote.as_deref().unwrap_or("<none>"),
-            self.rel_path_from_root.display()
-        )
-    }
-}
 
 /// Finds the URL of the first remote whose branch contains the given commit.
 /// Iterates through local references under `refs/remotes/*`.
-fn find_remote_url_containing_commit(repo: &Repository, commit_oid: Oid) -> Result<Option<String>> {
+fn find_remote_containing_commit(repo: &Repository, commit_oid: Oid) -> Result<Option<RemoteInfo>> {
     info!(
         "Searching local remote refs for commit {}",
         &commit_oid.to_string()[..7]
@@ -73,7 +49,7 @@ fn find_remote_url_containing_commit(repo: &Repository, commit_oid: Oid) -> Resu
                             match repo.find_remote(remote_name) {
                                 Ok(remote) => {
                                     if let Some(url) = remote.url() {
-                                        return Ok(Some(url.to_string()));
+                                        return Ok(Some(RemoteInfo::new(remote_name.to_string(), url.to_string())));
                                     } else {
                                         warn!(
                                             "Remote '{}' (from ref '{}') has no URL configured.",
@@ -319,7 +295,7 @@ pub fn print_repo_status_warning(status_info: &RepoStatusInfo) {
     println!("Running anyway...");
 }
 
-pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInformation)> {
+pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInformation, PathBuf)> {
     let canonical_directory = directory.canonicalize().with_context(|| {
         format!(
             "Failed to canonicalize directory path: {}",
@@ -444,9 +420,9 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
         "Attempting to find remote URL for commit {}",
         &commit_oid.to_string()[..7]
     );
-    let mut remote_url = find_remote_url_containing_commit(&repo, commit_oid)?;
+    let mut remote = find_remote_containing_commit(&repo, commit_oid)?;
 
-    if remote_url.is_none() {
+    if remote.is_none() {
         info!(
             "Commit {} not found on existing local remote refs. Attempting fetch...",
             &commit_oid.to_string()[..7]
@@ -460,8 +436,8 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
                     &commit_oid.to_string()[..7]
                 );
                 // Re-run the search after fetch
-                remote_url = find_remote_url_containing_commit(&repo, commit_oid)?;
-                if remote_url.is_some() {
+                remote = find_remote_containing_commit(&repo, commit_oid)?;
+                if remote.is_some() {
                     info!("Found remote URL after fetch.");
                 } else {
                     info!(
@@ -484,113 +460,12 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
     }
 
     let git_info = GitInformation {
-        commit: commit_oid,
-        remote: remote_url, // Use the determined URL (or None)
+        repo_name: repo_root.file_name().unwrap().to_string_lossy().to_string(),
+        commit: commit_oid.to_string(),
+        remote,
         branch,
-        rel_path_from_root,
-        root_path: repo_root.to_path_buf(),
+        subdir: rel_path_from_root,
     };
 
-    Ok((stdout_lines, git_info))
-}
-
-// --- Top Level Structure ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct CompilerMessage {
-    pub reason: String, // e.g., "compiler-message"
-    pub package_id: String,
-    pub manifest_path: PathBuf, // Using PathBuf for file paths
-    pub target: Target,
-    pub message: Diagnostic,
-}
-
-// --- Target Structure ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Target {
-    pub kind: Vec<String>,        // e.g., ["dylib", "rlib"]
-    pub crate_types: Vec<String>, // e.g., ["dylib", "rlib"]
-    pub name: String,
-    pub src_path: PathBuf, // Using PathBuf for file paths
-    pub edition: String,   // e.g., "2021"
-    pub doc: bool,
-    pub doctest: bool,
-    pub test: bool,
-}
-
-// --- Diagnostic Structure (Recursive) ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Diagnostic {
-    // The main message string. Often present at the top level.
-    pub message: String,
-
-    // The error/warning code, e.g., "E0999". Optional.
-    pub code: Option<DiagnosticCode>,
-
-    // Severity level, e.g., "error", "warning", "note"
-    pub level: String, // Could be an Enum later if needed
-
-    // Associated source code locations
-    pub spans: Vec<RustSpan>,
-
-    // Nested diagnostic messages (often notes or help messages)
-    pub children: Vec<Diagnostic>,
-
-    // The fully rendered message string. Often null in children.
-    pub rendered: Option<String>,
-
-    // This field seems specific to the top-level message object,
-    // using rename for the '$' and Option since it might not be in children.
-    #[serde(rename = "$message_type")]
-    pub message_type: Option<String>, // e.g., "diagnostic"
-}
-
-// --- Diagnostic Code Structure ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct DiagnosticCode {
-    pub code: String,                // e.g., "E0999"
-    pub explanation: Option<String>, // Often null
-}
-
-// --- Span Structure ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct RustSpan {
-    pub file_name: String,
-    pub byte_start: usize,
-    pub byte_end: usize,
-    pub line_start: usize,
-    pub line_end: usize,
-    pub column_start: usize,
-    pub column_end: usize,
-    pub is_primary: bool,         // Is this the primary span for the diagnostic?
-    pub text: Vec<TextHighlight>, // The code snippet associated with the span
-    pub label: Option<String>, // Label displayed with the span, e.g., "a precondition cannot be proved"
-    pub suggested_replacement: Option<String>, // Code suggestion
-    pub suggestion_applicability: Option<String>, // e.g., "MachineApplicable", "HasPlaceholders", etc. (Could be Enum)
-}
-
-impl RustSpan {
-    pub fn to_line_locs(&self, repo_root: &Path) -> Vec<LineLoc> {
-        let mut output = Vec::with_capacity(1 + self.line_end.saturating_sub(self.line_start));
-        let file = repo_root.join(Path::new(&self.file_name));
-        let mut line = self.line_start;
-        while line <= self.line_end {
-            output.push(LineLoc::new(line, file.clone()));
-            line += 1;
-        }
-        output
-    }
-}
-
-// --- Text Highlight Structure (within Span) ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct TextHighlight {
-    pub text: String,           // The line of code
-    pub highlight_start: usize, // 1-based column index
-    pub highlight_end: usize,   // 1-based column index
+    Ok((stdout_lines, git_info, repo_root.to_path_buf()))
 }

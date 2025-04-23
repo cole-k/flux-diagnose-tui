@@ -18,6 +18,7 @@ use syntect::{
     highlighting::{Theme, ThemeSet},
     parsing::SyntaxSet,
 };
+use crate::types::LineLoc;
 use tui_input::{backend::crossterm::EventHandler, Input}; // Added tui-input
 use unicode_width::UnicodeWidthStr;
 
@@ -30,19 +31,6 @@ pub enum AppMode {
     AddNote,
     FileExplorer,
     ConfirmationDialog,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct LineLoc {
-    /// 1-indexed
-    pub line: usize,
-    pub file: PathBuf,
-}
-
-impl LineLoc {
-    pub fn new(line: usize, file: PathBuf) -> Self {
-        Self { line, file }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
