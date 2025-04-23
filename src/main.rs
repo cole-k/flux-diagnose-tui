@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::{Args, Parser, Subcommand};
 use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -29,6 +29,9 @@ use local_paths::LocalPathResolver;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+    /// Directory to read/write benchmarks from
+    #[arg(long)]
+    bench_root: PathBuf,
 }
 
 #[derive(Subcommand, Clone)]
@@ -42,11 +45,18 @@ enum Command {
 }
 
 impl Command {
-    fn run(&self) -> Result<()> {
+    fn run(&self, bench_root: PathBuf) -> Result<()> {
+        let local_paths_config = bench_root.join(".localpaths.toml");
+        let local_resolver = LocalPathResolver::load(local_paths_config.clone())?;
+        // let cache_root = cache_root
+        //     .unwrap_or(bench_root
+        //                .parent()
+        //                .ok_or_else(|| anyhow!("Benchmark root {:?} doesn't have a parent", bench_root))?
+        //                .join("/.benchmark-cache"));
         match self {
-            Self::Add(args) => args.run(),
-            Self::Edit(args) => args.run(),
-            Self::Eval(args) => args.run(),
+            Self::Add(args)  => args.run(local_resolver, bench_root),
+            Self::Edit(args) => args.run(local_resolver, bench_root),
+            Self::Eval(args) => args.run(local_resolver, bench_root),
         }
     }
 }
@@ -55,10 +65,9 @@ impl Command {
 struct AddArgs {
     /// Directory to run `flux` in
     dir: PathBuf,
-    /// Directory to write benchmarks to
-    bench_dir: PathBuf,
-    /// Edit any benchmark files that already exist.
-    /// By default existing benchmarks are skipped.
+    /// Edit any benchmark files that already exist. By default existing
+    /// benchmarks are skipped. Note that this updates the error message if flux
+    /// generates a new message.
     #[arg(short, long)]
     edit_existing: bool,
     /// Overwrite any benchmark files that already exist (requires
@@ -68,94 +77,70 @@ struct AddArgs {
 }
 
 impl AddArgs {
-    fn run(&self) -> Result<()> {
-        // TODO: make function that takes in some flags, errors, git_info, repo_path
-        // and runs the TUI flow.
+    fn run(&self, local_resolver: LocalPathResolver, bench_root: PathBuf) -> Result<()> {
         let (errors_and_fixes, git_info, repo_path) = run_cmd::run_flux_in_dir(&self.dir)?;
-
-        let dir_path = repo_path.join(git_info.subdir.clone());
-
-        println!("Git info: {}", git_info);
-
-        let mut error_and_fixes_map: HashMap<String, ErrorAndFixes> = HashMap::new();
-
-        stdout().execute(EnterAlternateScreen)?;
-        enable_raw_mode()?;
-        let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-        terminal.clear()?;
-
-        // For this part we're in raw mode. Printing won't work.
-        let mut exit = false;
-        for error_and_fixes in errors_and_fixes.into_iter() {
-            if exit {
-                break;
-            }
-            loop {
-                let mut app_state = AppState::new(&error_and_fixes, &dir_path)?;
-                run_app(&mut terminal, &mut app_state)?;
-                match app_state.exit_intent {
-                    // Should never be None, but let's quit if it is just in case.
-                    Some(ExitIntent::Quit) | None => {
-                        exit = true;
-                        break;
-                    }
-                    Some(ExitIntent::Skip) => {
-                        break;
-                    }
-                    Some(ExitIntent::SaveAndNext) | Some(ExitIntent::SaveAndRedo) => {
-                        let fix = app_state.fixes(&dir_path)?;
-                        error_and_fixes_map
-                            .entry(error_and_fixes.error_name.clone())
-                            .and_modify(|e| {
-                                e.fixes.push(fix.clone())
-                            })
-                            .or_insert_with(|| {
-                                let mut e = error_and_fixes.clone();
-                                e.fixes = vec!(fix);
-                                e
-                        });
-                        // If the user selects SaveAndRedo, we should keep running.
-                        if matches!(app_state.exit_intent, Some(ExitIntent::SaveAndNext)) {
-                            break;
+        let suite = BenchmarkSuite::new(&bench_root, &git_info.repo_name, &git_info.subdir, &git_info.commit)?;
+        if self.overwrite_existing && !self.edit_existing {
+            return Err(anyhow!("FATAL: --overwrite-existing passed but --edit-existing not passed"));
+        }
+        let mut updated_errors_and_fixes = vec!();
+        if self.edit_existing {
+            for error_and_fixes in errors_and_fixes {
+                if let Some(existing_error_and_fix) = suite.load_single_benchmark(&error_and_fixes.error_name)? {
+                    if !self.overwrite_existing {
+                        // HACK: We'll generate a new ErrorAndFix for every fix. This way the existing fixes
+                        // are properly loaded.
+                        for fix in existing_error_and_fix.fixes {
+                            let mut new_error_and_fix = error_and_fixes.clone();
+                            new_error_and_fix.fixes = vec!(fix);
+                            updated_errors_and_fixes.push(new_error_and_fix);
                         }
+                    } else {
+                        updated_errors_and_fixes.push(error_and_fixes);
                     }
+                } else {
+                    updated_errors_and_fixes.push(error_and_fixes);
+                }
+            }
+        } else {
+            for error_and_fixes in errors_and_fixes {
+                // Only take the errors that we don't have in our DB already.
+                match suite.load_single_benchmark(&error_and_fixes.error_name)? {
+                    None => {
+                        updated_errors_and_fixes.push(error_and_fixes);
+                    }
+                    Some(loaded_error_and_fix) if loaded_error_and_fix.fixes.is_empty() => {
+                        println!("WARN: {} has no saved fixes but is recorded in the benchmarks, so we're skipping it.", loaded_error_and_fix.error_name);
+                    }
+                    _ => {}
                 }
             }
         }
-
-        disable_raw_mode()?;
-        stdout().execute(LeaveAlternateScreen)?;
-
-        run_benchmark_update(&git_info, &repo_path, &error_and_fixes_map.into_values().collect())?;
-
+        run_tui_editor(&self.dir, &repo_path, &git_info, suite, local_resolver, updated_errors_and_fixes)?;
         Ok(())
     }
 }
 
 #[derive(Args, Clone)]
 struct EditArgs {
-    /// Directory to read/write benchmarks from
-    bench_dir: PathBuf,
     #[command(flatten)]
     benchmarks: BenchmarkArgs,
 }
 
 impl EditArgs {
-    fn run(&self) -> Result<()> {
+    fn run(&self, local_resolver: LocalPathResolver, bench_root: PathBuf) -> Result<()> {
         Ok(())
     }
 }
 
 #[derive(Args, Clone)]
 struct EvalArgs {
-    /// Directory to eval benchmarks on
-    bench_dir: PathBuf,
     #[command(flatten)]
     benchmarks: BenchmarkArgs,
 }
 
 impl EvalArgs {
-    fn run(&self) -> Result<()> {
+    fn run(&self, local_resolver: LocalPathResolver, bench_root: PathBuf) -> Result<()> {
         Ok(())
     }
 }
@@ -166,16 +151,80 @@ struct BenchmarkArgs {
     /// repo (exactly), the name of a subdirectory (exactly), or the name of a
     /// commit (7 char or more prefix).
     benchmarks: Vec<String>,
+    #[arg(long)]
+    cache_root: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    cli.command.run()
+    cli.command.run(cli.bench_root)
 }
 
-// TODO: make function that takes in some flags, errors, git_info, repo_path
-// and runs the TUI flow.
-// fn run_tui_editor();
+/// Runs the TUI editor on each of the errors_and_fixes, collecting an
+/// annotation for them.  The save it performs overwrites any existing
+/// ErrorAndFix files.
+fn run_tui_editor(dir_path: &Path,
+                  repo_path: &Path,
+                  // This might be new GitInformation (if we're running flux and importing the errors)
+                  // or the same as the one in the suite (if we're running from the suite directly)
+                  git_info: &GitInformation,
+                  mut suite: BenchmarkSuite,
+                  local_resolver: LocalPathResolver,
+                  errors_and_fixes: Vec<ErrorAndFixes>)
+                  -> Result<()> {
+    let mut error_and_fixes_map: HashMap<String, ErrorAndFixes> = HashMap::new();
+
+    stdout().execute(EnterAlternateScreen)?;
+    enable_raw_mode()?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+    terminal.clear()?;
+
+    // For this part we're in raw mode. Printing won't work.
+    let mut exit = false;
+    for error_and_fixes in errors_and_fixes.into_iter() {
+        if exit {
+            break;
+        }
+        loop {
+            let mut app_state = AppState::new(&error_and_fixes, &dir_path)?;
+            run_app(&mut terminal, &mut app_state)?;
+            match app_state.exit_intent {
+                // Should never be None, but let's quit if it is just in case.
+                Some(ExitIntent::Quit) | None => {
+                    exit = true;
+                    break;
+                }
+                Some(ExitIntent::Skip) => {
+                    break;
+                }
+                Some(ExitIntent::SaveAndNext) | Some(ExitIntent::SaveAndRedo) => {
+                    let fix = app_state.fixes(&dir_path)?;
+                    error_and_fixes_map
+                        .entry(error_and_fixes.error_name.clone())
+                        .and_modify(|e| {
+                            e.fixes.push(fix.clone())
+                        })
+                        .or_insert_with(|| {
+                            let mut e = error_and_fixes.clone();
+                            e.fixes = vec!(fix);
+                            e
+                    });
+                    // If the user selects SaveAndRedo, we should keep running.
+                    if matches!(app_state.exit_intent, Some(ExitIntent::SaveAndNext)) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    disable_raw_mode()?;
+    stdout().execute(LeaveAlternateScreen)?;
+
+    suite.write_benchmarks(&error_and_fixes_map.into_values().collect::<Vec<_>>().as_slice(), git_info, &local_resolver, repo_path)?;
+
+    Ok(())
+}
 
 // // Define the struct to hold the results, similar to the Python dictionary
 // #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,9 +239,10 @@ fn main() -> Result<()> {
 fn run_benchmark_update(git_info: &GitInformation, repo_path: &Path, errors: &Vec<ErrorAndFixes>) -> Result<()> {
     let benchmarks_root = PathBuf::from("./my_benchmarks").canonicalize()?;
     let cache_root = PathBuf::from("./.benchmark-cache").canonicalize()?; // Example cache location
-    let local_paths_config = benchmarks_root.parent().unwrap_or(&benchmarks_root).join(".localpaths.toml");
+    let local_paths_config = benchmarks_root.join(".localpaths.toml");
 
     // --- Setup ---
+    let local_paths_config = benchmarks_root.join(".localpaths.toml");
     let mut local_resolver = LocalPathResolver::load(local_paths_config.clone())?;
     local_resolver.add_commit_override(&git_info.repo_name, &git_info.commit, repo_path);
     local_resolver.save()?;
@@ -207,11 +257,9 @@ fn run_benchmark_update(git_info: &GitInformation, repo_path: &Path, errors: &Ve
     )?;
     println!("Code available at temporary worktree: {:?}", worktree_path);
 
-
     // --- Instantiate Benchmark Suite ---
-    let subdir_name = git_info.subdir.file_name().unwrap().to_string_lossy();
     // Creates an object representing the suite on disk, tries to load git-info.json
-    let mut suite = BenchmarkSuite::new(&benchmarks_root, &git_info.repo_name, &subdir_name, &git_info.commit)?;
+    let mut suite = BenchmarkSuite::new(&benchmarks_root, &git_info.repo_name, &git_info.subdir, &git_info.commit)?;
 
 
     // Load existing benchmarks/annotations for this suite

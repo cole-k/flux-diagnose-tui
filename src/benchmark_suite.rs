@@ -1,6 +1,6 @@
 use crate::local_paths::LocalPathResolver; // Assuming local_paths.rs is in the same crate root
 use crate::types::{ErrorAndFixes, GitInformation}; // Assuming types.rs is in crate root
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -31,10 +31,11 @@ impl BenchmarkSuite {
     pub fn new(
         benchmarks_root: &Path,
         repo_name: &str,
-        subdir_name: &str,
+        subdir: &Path,
         commit_hash: &str,
     ) -> Result<Self> {
-        let suite_path = benchmarks_root.join(repo_name).join(subdir_name).join(commit_hash);
+        let subdir_name = subdir.file_name().ok_or_else(|| anyhow!("Cannot get name of Subdirectory {:?}", subdir))?.to_string_lossy();
+        let suite_path = benchmarks_root.join(repo_name).join(subdir).join(commit_hash);
         let git_info_path = suite_path.join("git-info.json");
 
         let git_info = if git_info_path.exists() {
