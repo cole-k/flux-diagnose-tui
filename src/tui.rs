@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap}, // Added Clear
 };
 use ratatui_explorer::FileExplorer;
-use std::fmt::Write;
+use std::{fmt::Write, path::Path};
 use std::{
     collections::{BTreeMap, VecDeque},
     fs::File,
@@ -18,7 +18,7 @@ use syntect::{
     highlighting::{Theme, ThemeSet},
     parsing::SyntaxSet,
 };
-use crate::types::LineLoc;
+use crate::types::{ErrorAndFixes, Fix, FixLine, LineLoc};
 use tui_input::{backend::crossterm::EventHandler, Input}; // Added tui-input
 use unicode_width::UnicodeWidthStr;
 
@@ -84,13 +84,36 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(error_message: String, error_lines: VecDeque<LineLoc>) -> Result<Self> {
+    pub fn new(error_and_fixes: &ErrorAndFixes, dir_path: &Path) -> Result<Self> {
         // Load syntax highlighting defaults
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
         let theme = theme_set.themes["base16-ocean.dark"].clone();
         let file_explorer_theme = ratatui_explorer::Theme::default().add_default_title();
         let file_explorer = FileExplorer::with_theme(file_explorer_theme)?;
+
+        // let rendered_message = line
+        //     .message
+        //     .rendered
+        //     .unwrap()
+        //     .lines()
+        //     // Skip the debug information
+        //     .filter(|line| !line.contains("constraint_debug_info"))
+        //     .collect::<Vec<&str>>()
+        //     .join("\n");
+        let rendered_message = error_and_fixes.error.message.rendered.clone().unwrap();
+
+        let error_lines: VecDeque<_> = error_and_fixes
+            .error_lines
+            .iter()
+            .map(|line_loc| {
+                LineLoc {
+                    line: line_loc.line,
+                    // Make the lines absolute
+                    file: dir_path.join(&line_loc.file).to_path_buf(),
+                }
+            })
+            .collect();
 
         let current_file_path = error_lines
             .front()
@@ -99,12 +122,12 @@ impl AppState {
             .clone();
 
         let mut state = Self {
-            error_message,
+            error_message: rendered_message,
             show_full_error: true,
             current_file_path,
             file_locations: BTreeMap::new(),
             lines: vec![],
-            error_lines,
+            error_lines: error_lines.clone(),
             fix_lines: BTreeMap::new(),
             note: None,
             current_line: 0,
@@ -322,6 +345,23 @@ impl AppState {
         self.go_to_line(next_error.line);
         self.error_lines.push_back(next_error);
         Ok(())
+    }
+
+    pub fn fixes(&self, repo_root: &Path) -> Result<Fix> {
+        let fix_lines = self.fix_lines.iter()
+            .map(|(line_loc, fix)| {
+                Ok::<FixLine, anyhow::Error>(FixLine {
+                    line: line_loc.line,
+                    file: pathdiff::diff_paths(&line_loc.file, repo_root)
+                        .ok_or_else(|| anyhow::anyhow!("Couldn't diff path {:?} and {:?}", repo_root, line_loc.file)
+                    )?,
+                    added_reft: fix.clone(),
+                })
+            }).collect::<Result<_>>()?;
+        Ok(Fix {
+            fix_lines,
+            note: self.note.clone(),
+        })
     }
 }
 

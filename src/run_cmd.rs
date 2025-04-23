@@ -1,10 +1,14 @@
-use crate::types::{CompilerMessage, GitInformation, RemoteInfo};
+use crate::types::{CompilerMessage, ErrorAndFixes, GitInformation, RemoteInfo};
 use anyhow::{bail, Context, Result};
 use git2::{
     ErrorCode, FetchOptions, FetchPrune, Oid, ReferenceType, RemoteCallbacks, Repository, Status,
     StatusOptions,
 }; // Added FetchOptions, FetchPrune, RemoteCallbacks
-use log::{error, info, warn}; // Added error level
+use log::{error, info, warn};
+use once_cell::sync::Lazy;
+use regex::Regex; use std::collections::{HashMap, VecDeque};
+use std::fs::File;
+// Added error level
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -295,69 +299,13 @@ pub fn print_repo_status_warning(status_info: &RepoStatusInfo) {
     println!("Running anyway...");
 }
 
-pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInformation, PathBuf)> {
+pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<ErrorAndFixes>, GitInformation, PathBuf)> {
     let canonical_directory = directory.canonicalize().with_context(|| {
         format!(
             "Failed to canonicalize directory path: {}",
             directory.display()
         )
     })?;
-
-    // --- Run the main command ---
-    info!(
-        "Running command: FLUX_FLAGS=\"-Fdebug-binder-output\" cargo flux --message-format=json in {}",
-        canonical_directory.display()
-    );
-    let command_desc = "cargo flux";
-    let mut cmd = Command::new("cargo");
-    cmd.args(["flux", "--message-format=json"])
-        // NOTE: I think we only need this for evaluating
-        // the output of new flux errors, not for diagnosing existing errors.
-        // .env("FLUXFLAGS", "-Fdebug-binder-output")
-        .current_dir(&canonical_directory)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
-
-    let mut child = cmd
-        .spawn()
-        .with_context(|| format!("Failed to spawn command: {}", command_desc))?;
-
-    let stdout_handle = child.stdout.take().ok_or_else(|| {
-        anyhow::anyhow!("Failed to get stdout handle for command: {}", command_desc)
-    })?;
-
-    let reader = BufReader::new(stdout_handle);
-    let mut stdout_lines = Vec::new();
-    for line_result in reader.lines() {
-        let line = line_result.with_context(|| {
-            format!("Failed to read line from command stdout: {}", command_desc)
-        })?;
-        let json: serde_json::Value = serde_json::from_str(&line)?;
-        // Does it have a "reason" field and is that reason "compiler-message"
-        if json
-            .as_object()
-            .and_then(|obj| {
-                obj.get("reason")
-                    .and_then(|reason| reason.as_str().map(|r| r == "compiler-message"))
-            })
-            .unwrap_or(false)
-        {
-            let parsed_line = serde_json::from_str(&line)?;
-            stdout_lines.push(parsed_line);
-        } else {
-            info!("Skipping line because it doesn't match the expected structure of a Rust compiler message: {}", line);
-        }
-    }
-
-    child
-        .wait()
-        .with_context(|| format!("Failed to wait for command process: {}", command_desc))?;
-
-    // We expect flux to fail, so we won't bother to deal with this.
-    // if !status.success() {
-    //     bail!("Command failed with status {}: {}", status, command_desc);
-    // }
-    info!("Command ran: {}", command_desc);
 
     // --- Collect Git Information using git2 ---
     info!(
@@ -467,5 +415,243 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<CompilerMessage>, GitInf
         subdir: rel_path_from_root,
     };
 
-    Ok((stdout_lines, git_info, repo_root.to_path_buf()))
+    // --- Run the main command ---
+    info!(
+        "Running command: FLUX_FLAGS=\"-Fdebug-binder-output\" cargo flux --message-format=json in {}",
+        canonical_directory.display()
+    );
+    let command_desc = "cargo flux";
+    let mut cmd = Command::new("cargo");
+    cmd.args(["flux", "--message-format=json"])
+        // NOTE: I think we only need this for evaluating
+        // the output of new flux errors, not for diagnosing existing errors.
+        // .env("FLUXFLAGS", "-Fdebug-binder-output")
+        .current_dir(&canonical_directory)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit());
+
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("Failed to spawn command: {}", command_desc))?;
+
+    let stdout_handle = child.stdout.take().ok_or_else(|| {
+        anyhow::anyhow!("Failed to get stdout handle for command: {}", command_desc)
+    })?;
+
+    let reader = BufReader::new(stdout_handle);
+    let mut errors = Vec::new();
+    let mut error_name_numbers: HashMap<String, usize> = HashMap::new();
+    // Build a Vec<ErrorAndFix> from the output (the fix is, of course, empty).
+    for line_result in reader.lines() {
+        let line = line_result.with_context(|| {
+            format!("Failed to read line from command stdout: {}", command_desc)
+        })?;
+        let json: serde_json::Value = serde_json::from_str(&line)?;
+        // Does it have a "reason" field and is that reason "compiler-message"
+        if !json
+            .as_object()
+            .and_then(|obj| {
+                obj.get("reason")
+                    .and_then(|reason| reason.as_str().map(|r| r == "compiler-message"))
+            })
+            .unwrap_or(false)
+        {
+            info!("Skipping line because it doesn't match the expected structure of a Rust compiler message: {}", line);
+            continue;
+        }
+        let error: CompilerMessage = serde_json::from_str(&line)?;
+        if error.message.level != "error" {
+            continue;
+        }
+        let mut error_lines: VecDeque<_> = error
+            .message
+            .spans
+            .iter()
+            .flat_map(|span| span.to_line_locs(None))
+            .collect();
+        error_lines.extend(error.message.children.iter().flat_map(|child| {
+            // NOTE: this diagnostic is apparently allowed to be recursive, but
+            // I sort of doubt it in practice is ever. So I am not recurring.
+            child
+                .spans
+                .iter()
+                .flat_map(|span| span.to_line_locs(None))
+        }));
+        if let Some(first_error) = error_lines.front() {
+            let containing_fn_name =
+                // NOTE: these files are kept relative (so that when we save
+                // them, we can find the right file again), so we need to make
+                // it absolute to look up the name.
+                extract_function_name(&canonical_directory.join(&first_error.file), first_error.line)?.unwrap();
+            let short_hash = git_info.commit[..7].to_string();
+            let error_name = format!(
+                "{}-{}-L{}",
+                short_hash, containing_fn_name, first_error.line
+            );
+            let error_name_entry = error_name_numbers
+                .entry(error_name.clone())
+                // If there is already an error name tracked, update the number
+                .and_modify(|n| *n += 1)
+                // Otherwise, this is the first
+                .or_insert(1);
+            let full_error_name = format!("{}-{}", error_name, error_name_entry);
+            errors.push(ErrorAndFixes {
+                error_name: full_error_name,
+                error,
+                // No fixes yet
+                fixes: vec!(),
+                // NOTE: The paths in these must be relative
+                error_lines
+            });
+        }
+    }
+
+    child
+        .wait()
+        .with_context(|| format!("Failed to wait for command process: {}", command_desc))?;
+
+    // We expect flux to fail, so we won't bother to deal with this.
+    // if !status.success() {
+    //     bail!("Command failed with status {}: {}", status, command_desc);
+    // }
+    info!("Command ran: {}", command_desc);
+
+    Ok((errors, git_info, repo_root.to_path_buf()))
+}
+
+// Compile the regex lazily and globally (or within the function scope if preferred)
+// Using Lazy ensures it's compiled only once, safely across threads.
+static FUNC_DEF_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"^\s*(?:pub(?:\(.*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+    )
+    .expect("Failed to compile function definition regex")
+    // Adjusted regex slightly:
+    // - Added optional `async` keyword.
+    // - Added optional `pub(...)` visibility specifier.
+    // - Kept the core fn name capture group `([a-zA-Z_][a-zA-Z0-9_]*)`.
+});
+
+
+/// Extracts the function name from the specified file at the given error line.
+///
+/// Args:
+/// * `file_path`: Path to the Rust source file.
+/// * `error_line`: The 1-based line number where the error occurred.
+///
+/// Returns:
+/// * `Ok(Some(String))` if the function name is found.
+/// * `Ok(None)` if the error line is not inside a recognizable function.
+/// * `Err(e)` if there's an error reading the file or other issue.
+pub fn extract_function_name(
+    file_path: &Path,
+    error_line: usize, // Expect 1-based line number
+) -> Result<Option<String>> {
+    if !file_path.is_file() {
+        // Using format! to create a String error message, then boxing it.
+        bail!("Cannot find file for context extraction: {:?}", file_path);
+    }
+
+    // Read all lines into memory. For very large files, line-by-line processing
+    // might be better, but this matches the Python approach.
+    let file = File::open(file_path)?;
+    let reader = BufReader::new(file);
+    let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
+
+    // Ensure error_line is within bounds (adjusting for 0-based index)
+    if error_line == 0 || error_line > lines.len() {
+        // Or return Ok(None) if an out-of-bounds line just means no context
+        bail!(
+            "Error line {} is out of bounds for file {:?} ({} lines)",
+            error_line,
+            file_path,
+            lines.len()
+        );
+    }
+
+    // let mut function_start_line: Option<usize> = None; // 1-based
+    let mut function_name: Option<String> = None;
+
+    // Go backwards from the line *before* the error line (0-based index)
+    // Saturating sub prevents underflow if error_line is 1.
+    for i in (0..=error_line.saturating_sub(1)).rev() {
+        let line = &lines[i]; // No need to trim here, regex handles leading space
+
+        if let Some(captures) = FUNC_DEF_PATTERN.captures(line) {
+            // Found the function definition line
+            // function_start_line = Some(i + 1); // Store 1-based line number
+            // Capture group 1 should be the function name
+            if let Some(name_match) = captures.get(1) {
+                function_name = Some(name_match.as_str().to_string());
+            }
+            break; // Stop searching backwards
+        }
+    }
+
+    Ok(function_name)
+
+    // // If we didn't find a function signature before the error line, return None
+    // let (Some(fn_start_line), Some(fn_name)) = (function_start_line, function_name) else {
+    //     return Ok(None);
+    // };
+
+    // // Now find the start of metadata (comments/attributes) preceding the function
+    // // Default metadata start is the function start itself
+    // let mut metadata_start_line = fn_start_line; // 1-based
+    // // Search backwards from the line *before* the function start line (0-based index)
+    // for i in (0..fn_start_line.saturating_sub(1)).rev() {
+    //     let line = lines[i].trim_start(); // Trim leading whitespace only
+    //     // Check for comments, attributes (#), or empty lines
+    //     if line.starts_with("//") || line.starts_with('#') || line.is_empty() {
+    //          // Continue searching backwards while we find metadata lines
+    //          metadata_start_line = i + 1; // Update the potential start (1-based)
+    //     } else {
+    //         // Found a non-metadata line, the block ended on the *next* line
+    //         break;
+    //     }
+    // }
+
+    // // Find the end of the function using brace counting
+    // let mut function_end_line: Option<usize> = None;
+    // let mut brace_count: i32 = 0;
+    // let mut found_opening_brace = false;
+
+    // // Start searching from the function definition line (0-based index)
+    // for i in (fn_start_line - 1)..lines.len() {
+    //     let line = &lines[i];
+    //     let open_braces = line.matches('{').count() as i32;
+    //     let close_braces = line.matches('}').count() as i32;
+
+    //     if !found_opening_brace && open_braces > 0 {
+    //         found_opening_brace = true;
+    //     }
+
+    //     if found_opening_brace {
+    //         brace_count += open_braces;
+    //         brace_count -= close_braces;
+
+    //         // If brace_count reaches 0 *after* processing this line,
+    //         // and we have found at least one opening brace, this is the end line.
+    //         if brace_count <= 0 {
+    //              function_end_line = Some(i + 1); // Store 1-based line number
+    //              break;
+    //         }
+    //     } else if i >= fn_start_line && close_braces > 0 {
+    //         // Handle edge case: closing brace appears before the first opening brace
+    //         // (e.g., malformed code or simple fn like `fn foo();`).
+    //         // If we are past the fn definition line and see a '}' before '{',
+    //         // assume it's not the function body we are looking for or it's malformed.
+    //         // We might stop here or continue, depending on desired robustness.
+    //         // For simplicity matching Python, we'll just let the loop continue,
+    //         // but `found_opening_brace` prevents premature closing.
+    //         // If the function has no body (like `fn foo();`), brace_count will never
+    //         // become positive, and function_end_line will remain None.
+    //     }
+    // }
+
+    // Ok(Some(FunctionContext {
+    //     start: metadata_start_line, // Use the found metadata start (1-based)
+    //     end: function_end_line,     // 1-based, or None if not found
+    //     name: fn_name,
+    // }))
 }
