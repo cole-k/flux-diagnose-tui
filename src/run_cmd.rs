@@ -494,11 +494,14 @@ pub fn run_flux_in_dir(directory: &Path, commit_hash: &str, get_diagnostics: boo
             child.spans.iter().flat_map(|span| span.to_line_locs(None))
         }));
         if let Some(first_error) = error_lines.front() {
-            let containing_fn_name =
+            let Some(containing_fn_name) =
                 // NOTE: these files are kept relative (so that when we save
                 // them, we can find the right file again), so we need to make
                 // it absolute to look up the name.
-                extract_function_name(&canonical_directory.join(&first_error.file), first_error.line)?.unwrap();
+                extract_function_name(&canonical_directory.join(&first_error.file), first_error.line)? else {
+                    warn!("Skipping error in {:?} on line {} because it has no containing function", first_error.file, first_error.line);
+                    continue;
+            };
             let short_hash = commit_hash[..7].to_string();
             let error_name = format!(
                 "{}-{}-L{}",
