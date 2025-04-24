@@ -303,7 +303,7 @@ pub fn print_repo_status_warning(status_info: &RepoStatusInfo) {
     println!("Running anyway...");
 }
 
-pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<ErrorAndFixes>, GitInformation, PathBuf)> {
+pub fn discover_git_info(directory: &Path) -> Result<(GitInformation, PathBuf)> {
     let canonical_directory = directory.canonicalize().with_context(|| {
         format!(
             "Failed to canonicalize directory path: {}",
@@ -419,6 +419,17 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<ErrorAndFixes>, GitInfor
         subdir: rel_path_from_root,
     };
 
+    Ok((git_info, repo_root.to_path_buf()))
+}
+
+pub fn run_flux_in_dir(directory: &Path, commit_hash: &str) -> Result<Vec<ErrorAndFixes>> {
+    let canonical_directory = directory.canonicalize().with_context(|| {
+        format!(
+            "Failed to canonicalize directory path: {}",
+            directory.display()
+        )
+    })?;
+
     // --- Run the main command ---
     info!(
         "Running command: FLUX_FLAGS=\"-Fdebug-binder-output\" cargo flux --message-format=json in {}",
@@ -484,7 +495,7 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<ErrorAndFixes>, GitInfor
                 // them, we can find the right file again), so we need to make
                 // it absolute to look up the name.
                 extract_function_name(&canonical_directory.join(&first_error.file), first_error.line)?.unwrap();
-            let short_hash = git_info.commit[..7].to_string();
+            let short_hash = commit_hash[..7].to_string();
             let error_name = format!(
                 "{}-{}-L{}",
                 short_hash, containing_fn_name, first_error.line
@@ -517,7 +528,7 @@ pub fn run_flux_in_dir(directory: &Path) -> Result<(Vec<ErrorAndFixes>, GitInfor
     // }
     info!("Command ran: {}", command_desc);
 
-    Ok((errors, git_info, repo_root.to_path_buf()))
+    Ok(errors)
 }
 
 // Compile the regex lazily and globally (or within the function scope if preferred)

@@ -78,7 +78,8 @@ struct AddArgs {
 
 impl AddArgs {
     fn run(&self, local_resolver: LocalPathResolver, bench_root: PathBuf) -> Result<()> {
-        let (errors_and_fixes, git_info, repo_path) = run_cmd::run_flux_in_dir(&self.dir)?;
+        let (git_info, repo_path) = run_cmd::discover_git_info(&self.dir)?;
+        let errors_and_fixes = run_cmd::run_flux_in_dir(&self.dir, &git_info.commit)?;
         let suite = BenchmarkSuite::new(
             &bench_root,
             &git_info.repo_name,
