@@ -1,5 +1,4 @@
-use crate::local_paths::LocalPathResolver; // Assuming local_paths.rs is in the same crate root
-use crate::types::{ErrorAndFixes, GitInformation}; // Assuming types.rs is in crate root
+use crate::types::{ErrorAndFixes, GitInformation};
 use anyhow::{anyhow, Context, Result};
 use std::{
     fs,
@@ -147,8 +146,6 @@ impl BenchmarkSuite {
         &mut self, // Needs mut to update self.git_info
         benchmarks: &[ErrorAndFixes],
         git_info: &GitInformation, // Explicitly name it for clarity
-        local_resolver: &LocalPathResolver, // Pass by reference
-        repo_path: &Path,
     ) -> Result<()> {
         // 1. Ensure directory exists
         fs::create_dir_all(&self.suite_path)
@@ -179,18 +176,6 @@ impl BenchmarkSuite {
 
         // Optional: Clean up stale benchmark files not present in the `benchmarks` list.
         // self.cleanup_stale_files(benchmarks)?;
-
-        // 4. Update .localpaths.toml using the resolver's helper method
-        //    We record the *actual* path used for *this specific run*.
-        let local_paths_config_path = local_resolver.config_path(); // Get path from resolver
-
-        LocalPathResolver::record_and_save_commit_override(
-            local_paths_config_path,
-            &self.repo_name,
-            &self.commit_hash,
-            repo_path, // The absolute path recorded during this specific run
-        )
-        .context("Failed to record local path override")?;
 
         println!(
             "Successfully wrote benchmarks for {}/{} at {}",

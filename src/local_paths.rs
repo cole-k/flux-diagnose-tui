@@ -30,6 +30,7 @@ pub struct LocalPathsConfig {
     pub repositories: HashMap<String, RepoLocalPaths>,
 }
 
+#[derive(Clone)]
 pub struct LocalPathResolver {
     config_path: PathBuf,
     config: LocalPathsConfig,
@@ -88,6 +89,7 @@ impl LocalPathResolver {
     }
 
     /// Adds or updates the default local path override for a repo.
+    #[allow(dead_code)]
     pub fn add_default_override(&mut self, repo_name: &str, local_path: &Path) {
         self.config
             .repositories

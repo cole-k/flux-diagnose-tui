@@ -432,7 +432,7 @@ pub fn run_flux_in_dir(directory: &Path, commit_hash: &str) -> Result<Vec<ErrorA
 
     // --- Run the main command ---
     info!(
-        "Running command: FLUX_FLAGS=\"-Fdebug-binder-output\" cargo flux --message-format=json in {}",
+        "Running command: cargo flux --message-format=json in {}",
         canonical_directory.display()
     );
     let command_desc = "cargo flux";

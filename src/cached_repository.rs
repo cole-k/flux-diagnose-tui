@@ -1,15 +1,12 @@
 use crate::local_paths::LocalPathResolver;
 use crate::types::RemoteInfo; // Assuming local_paths.rs is in the same crate root
 use anyhow::{bail, Context, Result};
+use tempfile::TempDir;
  // Using git2 crate for git operations
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use url::Url; // For sanitizing URLs for cache paths
-
-// Counter for unique worktree paths
-static WORKTREE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// Manages retrieval and caching of source code repositories.
 pub struct CachedRepository<'a> {
@@ -17,56 +14,23 @@ pub struct CachedRepository<'a> {
     local_resolver: &'a LocalPathResolver, // Borrow the resolver
 }
 
-/// RAII Guard to automatically clean up a git worktree.
-pub struct WorktreeGuard {
-    repo_path: PathBuf,
-    worktree_path: PathBuf,
+/// Wraps a [`TempDir`] containing a worktree so that it can clean up the
+/// original repo before the TempDir is dropped.
+pub struct TempGitWorktreeDir {
+    pub repo_path: PathBuf,
+    pub worktree_dir: TempDir,
 }
 
-impl Drop for WorktreeGuard {
+impl Drop for TempGitWorktreeDir {
     fn drop(&mut self) {
-        println!("Cleaning up worktree: {:?}", self.worktree_path);
+        println!("Cleaning up worktree: {:?}", self.worktree_dir.path());
         // Attempt to remove the worktree using the git command line
         // git2's worktree support is limited, command line is often more robust here.
-        let status = Command::new("git")
+        let _ = Command::new("git")
             .args(["-C", self.repo_path.to_str().unwrap()]) // Run in the main repo dir
             .args(["worktree", "remove", "--force"]) // Force removal even if dirty
-            .arg(&self.worktree_path)
+            .arg(&self.worktree_dir.path())
             .status();
-
-        match status {
-            Ok(s) if s.success() => {
-                // Optionally, try removing the directory itself if git didn't
-                let _ = fs::remove_dir_all(&self.worktree_path);
-            }
-            Ok(s) => {
-                eprintln!(
-                    "Warning: Failed to remove worktree {:?} (exit code: {:?})",
-                    self.worktree_path,
-                    s.code()
-                );
-                // Consider attempting `rm -rf` as a last resort, but be careful
-                if let Err(e) = fs::remove_dir_all(&self.worktree_path) {
-                    eprintln!(
-                        "Warning: Failed to remove worktree directory {:?} forcefully: {}",
-                        self.worktree_path, e
-                    );
-                }
-            }
-            Err(e) => {
-                eprintln!(
-                    "Warning: Failed to execute git command to remove worktree {:?}: {}",
-                    self.worktree_path, e
-                );
-                // Consider attempting `rm -rf` as a last resort, but be careful
-                if let Err(e) = fs::remove_dir_all(&self.worktree_path) {
-                    eprintln!(
-                        "Warning: Failed to remove worktree directory {:?} forcefully: {}",
-                        self.worktree_path, e
-                    );
-                }
-            }
-        }
     }
 }
 
@@ -101,7 +65,7 @@ impl<'a> CachedRepository<'a> {
         repo_name: &str,
         commit_hash: &str,
         remote: &Option<RemoteInfo>, // Needed for cloning if not local/cached
-    ) -> Result<(PathBuf, WorktreeGuard)> {
+    ) -> Result<TempGitWorktreeDir> {
         // 1. Try resolving local path first
         if let Some(local_repo_path) = self.local_resolver.resolve(repo_name, commit_hash) {
             println!("Found local path override: {:?}", local_repo_path);
@@ -272,7 +236,7 @@ impl<'a> CachedRepository<'a> {
         &self,
         repo_path: &Path,
         commit_hash: &str,
-    ) -> Result<(PathBuf, WorktreeGuard)> {
+    ) -> Result<TempGitWorktreeDir> {
         let repo = git2::Repository::open(repo_path)
             .with_context(|| format!("Failed to open repository at {:?}", repo_path))?;
 
@@ -287,28 +251,16 @@ impl<'a> CachedRepository<'a> {
             )
         })?;
 
-        // Create a unique path for the worktree inside the cache dir or a system temp dir
-        let worktree_id = WORKTREE_COUNTER.fetch_add(1, Ordering::SeqCst);
-        // Place worktrees relative to the cache root to keep things together
-        let worktree_path = self.cache_root.join("worktrees").join(format!(
-            "{}-{}-{}",
-            repo_path.file_name().unwrap_or_default().to_string_lossy(),
-            &commit_hash[..8], // Short hash for readability
-            worktree_id
-        ));
+        let worktree_dir = tempfile::tempdir()?;
 
-        println!("Creating worktree at: {:?}", worktree_path);
-
-        // Ensure parent directory exists
-        fs::create_dir_all(worktree_path.parent().unwrap())
-            .with_context(|| "Failed to create worktree parent directory".to_string())?;
+        println!("Creating worktree at: {:?}", worktree_dir.path());
 
         // Use git2's worktree add (requires libgit2 1.1+) or shell out
         // Shelling out is often more reliable across git versions
         let status = Command::new("git")
             .args(["-C", repo_path.to_str().unwrap()])
             .args(["worktree", "add", "--detach"])
-            .arg(&worktree_path)
+            .arg(&worktree_dir.path())
             .arg(commit_hash)
             .status()
             .context("Failed to execute git worktree add command")?;
@@ -317,20 +269,18 @@ impl<'a> CachedRepository<'a> {
             bail!(
                 "'git worktree add' command failed for commit {} at {:?}",
                 commit_hash,
-                worktree_path
+                worktree_dir.path()
             );
         }
 
-        let guard = WorktreeGuard {
+        Ok(TempGitWorktreeDir {
             repo_path: repo_path.to_path_buf(),
-            worktree_path: worktree_path.clone(),
-        };
-
-        Ok((worktree_path, guard))
+            worktree_dir,
+        })
     }
 
     /// Creates a safe directory name from a URL.
-    fn calculate_cache_path(&self, remote_url: &str) -> Result<PathBuf> {
+    pub fn calculate_cache_path(&self, remote_url: &str) -> Result<PathBuf> {
         let parsed_url = Url::parse(remote_url)
             .with_context(|| format!("Failed to parse remote URL: {}", remote_url))?;
         let host = parsed_url.host_str().unwrap_or("local");
