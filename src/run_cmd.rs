@@ -422,7 +422,7 @@ pub fn discover_git_info(directory: &Path) -> Result<(GitInformation, PathBuf)> 
     Ok((git_info, repo_root.to_path_buf()))
 }
 
-pub fn run_flux_in_dir(directory: &Path, commit_hash: &str) -> Result<Vec<ErrorAndFixes>> {
+pub fn run_flux_in_dir(directory: &Path, commit_hash: &str, get_diagnostics: bool) -> Result<Vec<ErrorAndFixes>> {
     let canonical_directory = directory.canonicalize().with_context(|| {
         format!(
             "Failed to canonicalize directory path: {}",
@@ -444,6 +444,10 @@ pub fn run_flux_in_dir(directory: &Path, commit_hash: &str) -> Result<Vec<ErrorA
         .current_dir(&canonical_directory)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
+
+    if get_diagnostics {
+        cmd.env("FLUXFLAGS", "-Fdebug-binder-output");
+    }
 
     let mut child = cmd
         .spawn()

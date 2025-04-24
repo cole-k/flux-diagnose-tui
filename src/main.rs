@@ -20,6 +20,7 @@ mod local_paths;
 mod run_cmd;
 mod tui;
 mod types;
+mod evaluator;
 
 use benchmark_processor::{process_benchmarks, BenchmarkArgs};
 use benchmark_suite::BenchmarkSuite;
@@ -107,7 +108,7 @@ impl AddArgs {
         let (git_info, repo_path) = run_cmd::discover_git_info(&absolute_dir)?;
         println!("Discovered Git info: {}", git_info);
 
-        let errors_and_fixes = run_cmd::run_flux_in_dir(&absolute_dir, &git_info.commit)?;
+        let errors_and_fixes = run_cmd::run_flux_in_dir(&absolute_dir, &git_info.commit, false)?;
         if errors_and_fixes.is_empty() {
              println!("No Flux errors found in {}. Nothing to add.", absolute_dir.display());
              return Ok(());
@@ -281,6 +282,7 @@ impl EvalArgs {
         cache_root: &Path,
     ) -> Result<()> {
         println!("Running Eval command...");
+        let mut evaluations = vec!();
 
         // Define the action closure for evaluation
         let eval_action = |suite: &BenchmarkSuite,
@@ -308,19 +310,10 @@ impl EvalArgs {
                  return Ok(());
             }
 
-
-            // 3. *** Implement the actual evaluation logic here ***
-            //    This likely involves:
-            //    - Iterating through `benchmarks_to_run`.
-            //    - For each benchmark:
-            //        - Constructing the necessary commands (e.g., `cargo flux ...` specific to the benchmark).
-            //        - Running the command within the `worktree_path`.
-            //            - Use `std::process::Command`.
-            //            - Make sure to run it in the correct subdirectory within the worktree,
-            //              using the `subdir` from `suite.git_info()`.
-            //        - Capturing/parsing the output.
-            //        - Comparing results against expected outcomes (if applicable).
-            //        - Recording metrics/results.
+            let benchmarks_map: HashMap<String, ErrorAndFixes> = benchmarks_to_run
+                                   .into_iter()
+                                   .map(|e| (e.error_name.clone(), e))
+                                   .collect();
 
             let git_info = suite.git_info().ok_or_else(|| {
                 anyhow!("Cannot run eval for suite {:?}: git-info.json is missing.", suite.path())
@@ -329,16 +322,17 @@ impl EvalArgs {
 
 
             println!("  Evaluation logic placeholder for subdir: {:?}", eval_subdir);
-            for benchmark in benchmarks_to_run {
-                println!("    Running evaluation for: {}", benchmark.error_name);
-                // Placeholder: Run flux check or specific test
-                // let status = Command::new("cargo")
-                //     .args(["flux", "--message-format=json"]) // Add specific flags if needed
-                //     .current_dir(&eval_subdir)
-                //     .status()?;
-                // println!("      Command status: {:?}", status);
-                 // Add more detailed result processing
-                 println!("      (Evaluation not fully implemented yet)");
+            let flux_errors = run_cmd::run_flux_in_dir(&eval_subdir, &git_info.commit, true)?;
+            for error in flux_errors {
+                println!("error {}", error.error_name);
+                if let Some(benchmark_error) = benchmarks_map.get(&error.error_name) {
+                    println!("    Running evaluation for: {}", benchmark_error.error_name);
+                    if let Some(constraint_debug_info) = evaluator::extract_constraint_debug_info(&error.error)? {
+                        let eval = evaluator::evaluate_error(&constraint_debug_info, benchmark_error);
+                        println!("evaluation: {:?}", eval);
+                        evaluations.push(eval);
+                    }
+                }
             }
 
 
@@ -354,7 +348,12 @@ impl EvalArgs {
             &local_resolver,
             cache_root, // Pass cache_root
             eval_action,
-        )
+        )?;
+
+        println!("Error summary:");
+        println!("{}", evaluator::generate_summary_table(&evaluations));
+
+        Ok(())
     }
 }
 
