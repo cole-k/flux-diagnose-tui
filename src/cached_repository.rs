@@ -147,11 +147,18 @@ impl<'a> CachedRepository<'a> {
                 );
                 // Fall through to the remote/cache logic below
             } else {
+                // FIXME: We should always do the cache lookup, regardless of use_cache.
+                // This parameter is only for determining whether to _save_ to a cache.
+                //
                 // Local path exists, decide whether to cache or use temporary based on use_cache
                 if use_cache {
                     // Attempt to create or get a *cached* worktree from the *local* repo
                     println!("Attempting to use cached worktree for local override.");
-                    return self.create_or_get_local_cached_worktree(local_repo_path, repo_name, commit_hash)
+                    // FIXME: This should be two separate functions (get and create) and it
+                    // should be independent of whether it is local or remote. We only need to
+                    // use the local or remote information to determine the path.
+                    let worktree_path = self.calculate_local_cached_worktree_path(repo_name, commit_hash)?;
+                    return self.create_or_get_cached_worktree(local_repo_path, &worktree_path, commit_hash)
                         .with_context(|| format!("Failed to get/create cached worktree from local override path: {:?}", local_repo_path));
                 } else {
                     // Create a temporary worktree from the local repo (existing behavior for use_cache=false)
@@ -181,8 +188,12 @@ impl<'a> CachedRepository<'a> {
         self.fetch_commit(&repo, commit_hash, remote)?;
 
         // 3. Create worktree (Cached or Temporary) based on use_cache flag for remote repo
+        // FIXME: We should always do the cache lookup, regardless of use_cache.
+        // This parameter is only for determining whether to _save_ to a cache.
+        //
         if use_cache {
-            self.create_or_get_remote_cached_worktree(&cached_repo_path, commit_hash, remote)
+            let worktree_path = self.calculate_remote_cached_worktree_path(&remote.remote_url, commit_hash)?.canonicalize()?;
+            self.create_or_get_cached_worktree(&cached_repo_path, &worktree_path, commit_hash)
                 .with_context(|| format!("Failed to get/create cached worktree for remote commit {}", commit_hash))
         } else {
             self.create_temporary_worktree(&cached_repo_path, commit_hash)
@@ -356,14 +367,38 @@ impl<'a> CachedRepository<'a> {
         })
     }
 
-    /// Gets path to existing cached worktree or creates a new one from the cached *remote* bare repo.
-    fn create_or_get_remote_cached_worktree(
+    fn lookup_cached_worktree(
         &self,
         repo_path: &Path, // Path to the *cached bare* repo
+        worktree_path: &Path,
+    ) -> Option<GitWorktreeDir> {
+        // Check if a valid worktree already exists
+        // A valid git worktree contains a `.git` file pointing to the main repo.
+        let git_file_path = worktree_path.join(".git");
+        if worktree_path.is_dir() && git_file_path.is_file() {
+             // Optional: Add more validation, e.g., read .git file, run `git worktree list`
+             println!("Found existing cached remote worktree at: {:?}", worktree_path);
+             Some(GitWorktreeDir {
+                 repo_path: repo_path.to_path_buf(), // Points to the cached bare repo
+                 worktree_path: worktree_path.to_path_buf(),
+                 _temporary_marker: None, // Mark as cached
+             })
+        } else {
+            None
+        }
+    }
+
+    /// Gets path to existing cached worktree or creates a new one from the cached *remote* bare repo.
+    fn create_or_get_cached_worktree(
+        &self,
+        repo_path: &Path, // Path to the *cached bare* repo
+        worktree_path: &Path,
         commit_hash: &str,
-        remote: &RemoteInfo, // Needed for path calculation
     ) -> Result<GitWorktreeDir> {
-         let repo = git2::Repository::open(repo_path)
+        if let Some(found_worktree) = self.lookup_cached_worktree(repo_path, &worktree_path) {
+            return Ok(found_worktree);
+        }
+        let repo = git2::Repository::open(repo_path)
             .with_context(|| format!("Failed to open repository at {:?}", repo_path))?;
 
         let oid = git2::Oid::from_str(commit_hash)
@@ -377,8 +412,6 @@ impl<'a> CachedRepository<'a> {
             )
         })?;
 
-        let worktree_path = self.calculate_remote_cached_worktree_path(&remote.remote_url, commit_hash)?.canonicalize()?;
-
         // Check if a valid worktree already exists
         // A valid git worktree contains a `.git` file pointing to the main repo.
         let git_file_path = worktree_path.join(".git");
@@ -387,7 +420,7 @@ impl<'a> CachedRepository<'a> {
              println!("Found existing cached remote worktree at: {:?}", worktree_path);
              return Ok(GitWorktreeDir {
                  repo_path: repo_path.to_path_buf(), // Points to the cached bare repo
-                 worktree_path,
+                 worktree_path: worktree_path.to_path_buf(),
                  _temporary_marker: None, // Mark as cached
              });
         }
@@ -424,89 +457,10 @@ impl<'a> CachedRepository<'a> {
 
          Ok(GitWorktreeDir {
             repo_path: repo_path.to_path_buf(), // Points to the cached bare repo
-            worktree_path,
+            worktree_path: worktree_path.to_path_buf(),
             _temporary_marker: None, // Mark as cached
         })
     }
-
-    /// Gets path to existing cached worktree or creates a new one from the *local override* repository.
-    fn create_or_get_local_cached_worktree(
-        &self,
-        local_repo_path: &Path, // Path to the user's local repo clone
-        repo_name: &str,        // Logical repo name for cache path
-        commit_hash: &str,
-    ) -> Result<GitWorktreeDir> {
-        // 1. Calculate cache path using the specific local structure
-        let worktree_path = self.calculate_local_cached_worktree_path(repo_name, commit_hash)?;
-        println!("Worktree will live here {:?}", worktree_path);
-
-        // 2. Open the *local* repository to check commit existence
-        let repo = git2::Repository::open(local_repo_path)
-            .with_context(|| format!("Failed to open local repository override at {:?}", local_repo_path))?;
-
-        let oid = git2::Oid::from_str(commit_hash)
-            .with_context(|| format!("Invalid commit hash format: {}", commit_hash))?;
-
-        // Ensure commit exists in the local repo
-        repo.find_commit(oid).with_context(|| {
-            format!(
-                "Commit {} not found in local repository override {:?}",
-                commit_hash, local_repo_path
-            )
-        })?;
-
-        // 3. Check if a valid worktree already exists at the cache path
-        let git_file_path = worktree_path.join(".git");
-        if worktree_path.is_dir() && git_file_path.is_file() {
-            // Optional: Add more validation (e.g., check if .git points to the correct local_repo_path?)
-            // For now, assume it's correct if it exists.
-            println!("Found existing cached local worktree at: {:?}", worktree_path);
-            return Ok(GitWorktreeDir {
-                repo_path: local_repo_path.to_path_buf(), // Point repo_path to the *original* local repo
-                worktree_path,
-                _temporary_marker: None, // Mark as cached
-            });
-        }
-
-        // 4. If it exists but isn't valid, remove it
-        if worktree_path.exists() {
-            bail!("FATAL: Path {:?} exists but is not a valid Git worktree directory.", worktree_path);
-        }
-
-        // 5. Create the cached worktree directory structure
-        println!("Creating new cached local worktree at: {:?}", worktree_path);
-        fs::create_dir_all(&worktree_path).with_context(|| format!("Failed to create directory for cached local worktree: {:?}", worktree_path))?;
-
-        // 6. Use `git worktree add` targeting the *local* repo
-        let local_repo_path_str = local_repo_path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid local repo path string: {:?}", local_repo_path))?;
-        let status = Command::new("git")
-            // Use -C to specify the repository path where the command runs
-            .args(["-C", local_repo_path_str])
-            .args(["worktree", "add", "--detach"])
-            .arg(&worktree_path) // The path where the new worktree will be created
-            .arg(commit_hash)    // The commit to check out
-            .status()
-            .context("Failed to execute git worktree add command for cached local worktree")?;
-
-        if !status.success() {
-            // Clean up the created directory if 'git worktree add' failed
-            fs::remove_dir_all(&worktree_path)?;
-            bail!(
-                "'git worktree add' command failed for cached local worktree (commit {}) at {:?} from repo {:?}",
-                commit_hash,
-                worktree_path,
-                local_repo_path
-            );
-        }
-
-        // 7. Return the GitWorktreeDir struct
-        Ok(GitWorktreeDir {
-            repo_path: local_repo_path.to_path_buf(), // Point repo_path to the *original* local repo
-            worktree_path,
-            _temporary_marker: None, // Mark as cached
-        })
-    }
-
 
     /// Calculates the cache path for the bare repository clone based on remote URL.
     /// Ensures it's under a `repos` subdirectory.
