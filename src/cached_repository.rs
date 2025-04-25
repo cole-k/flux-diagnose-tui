@@ -154,9 +154,6 @@ impl<'a> CachedRepository<'a> {
                 if use_cache {
                     // Attempt to create or get a *cached* worktree from the *local* repo
                     println!("Attempting to use cached worktree for local override.");
-                    // FIXME: This should be two separate functions (get and create) and it
-                    // should be independent of whether it is local or remote. We only need to
-                    // use the local or remote information to determine the path.
                     let worktree_path = self.calculate_local_cached_worktree_path(repo_name, commit_hash)?;
                     return self.create_or_get_cached_worktree(local_repo_path, &worktree_path, commit_hash)
                         .with_context(|| format!("Failed to get/create cached worktree from local override path: {:?}", local_repo_path));
