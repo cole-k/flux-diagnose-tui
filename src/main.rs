@@ -173,8 +173,6 @@ impl AddArgs {
                         }
                     } else {
                         println!("Skipping existing benchmark (use --edit-existing to modify): {}", error_and_fixes.error_name);
-                        // If not editing, add the existing one back to ensure it's saved later
-                         updated_errors_and_fixes.push(existing_benchmark.clone());
                     }
                 }
                 None => {
@@ -475,7 +473,6 @@ fn run_tui_editor(
     stdout().execute(EnterAlternateScreen)?;
     enable_raw_mode()?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-    terminal.clear()?;
 
     let mut exit_tui = false;
     for initial_error_and_fixes in errors_and_fixes_to_process.into_iter() {
@@ -506,6 +503,7 @@ fn run_tui_editor(
                  let mut app_state = AppState::new(&current_eaf_for_tui, dir_path)
                      .context("Failed to initialize TUI state")?;
 
+                terminal.clear()?;
                 // Terminal interaction loop
                  if let Err(e) = run_app(&mut terminal, &mut app_state) {
                      // Clean up terminal before propagating error

@@ -88,7 +88,7 @@ impl AppState {
         // Load syntax highlighting defaults
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
-        let theme = theme_set.themes["base16-ocean.dark"].clone();
+        let theme = theme_set.themes["base16-mocha.dark"].clone();
         let file_explorer_theme = ratatui_explorer::Theme::default().add_default_title();
         let file_explorer = FileExplorer::with_theme(file_explorer_theme)?;
 
