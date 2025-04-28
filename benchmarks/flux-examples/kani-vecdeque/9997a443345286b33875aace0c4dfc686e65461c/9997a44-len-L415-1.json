@@ -1,0 +1,187 @@
+{
+  "error_name": "9997a44-len-L415-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 13227,
+          "byte_end": 13266,
+          "line_start": 415,
+          "line_end": 415,
+          "column_start": 9,
+          "column_end": 48,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        count(self.tail, self.head, self.cap())",
+              "highlight_start": 9,
+              "highlight_end": 48
+            }
+          ],
+          "label": "a postcondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 13170,
+              "byte_end": 13182,
+              "line_start": 413,
+              "line_end": 413,
+              "column_start": 56,
+              "column_end": 68,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::sig(fn (&VecDeque<T,A>[@self]) -> usize{v: v < self.cap})]",
+                  "highlight_start": 56,
+                  "highlight_end": 68
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `count(self.tail, self.head, self.cap()) < self.cap`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `vec_deque::count`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 17640,
+              "byte_end": 17645,
+              "line_start": 581,
+              "line_end": 581,
+              "column_start": 4,
+              "column_end": 9,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn count(tail: usize, head: usize, size: Size) -> usize {",
+                  "highlight_start": 4,
+                  "highlight_end": 9
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`count(self.tail, self.head, self.cap())` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 13227,
+              "byte_end": 13266,
+              "line_start": 415,
+              "line_end": 415,
+              "column_start": 9,
+              "column_end": 48,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        count(self.tail, self.head, self.cap())",
+                  "highlight_start": 9,
+                  "highlight_end": 48
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/vec_deque.rs:415:9\n    |\n415 |         count(self.tail, self.head, self.cap())\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a postcondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/vec_deque.rs:413:56\n    |\n413 |     #[flux::sig(fn (&VecDeque<T,A>[@self]) -> usize{v: v < self.cap})]\n    |                                                        ^^^^^^^^^^^^\n    = note: constraint that could not be proven: `count(self.tail, self.head, self.cap()) < self.cap`\nnote: try adding a refinement to the function `vec_deque::count`\n   --> src/vec_deque.rs:581:4\n    |\n581 | fn count(tail: usize, head: usize, size: Size) -> usize {\n    |    ^^^^^\nnote: `count(self.tail, self.head, self.cap())` defined here\n   --> src/vec_deque.rs:415:9\n    |\n415 |         count(self.tail, self.head, self.cap())\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 581,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output: {v: v < size}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 415,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 413,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 581,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 415,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

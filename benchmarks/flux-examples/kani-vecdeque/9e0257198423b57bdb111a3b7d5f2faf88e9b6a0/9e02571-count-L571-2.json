@@ -1,0 +1,153 @@
+{
+  "error_name": "9e02571-count-L571-2",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 17062,
+          "byte_end": 17103,
+          "line_start": 571,
+          "line_end": 571,
+          "column_start": 5,
+          "column_end": 46,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "    wrap_index(head.wrapping_sub(tail), size)",
+              "highlight_start": 5,
+              "highlight_end": 46
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 1025,
+              "byte_end": 1029,
+              "line_start": 30,
+              "line_end": 30,
+              "column_start": 49,
+              "column_end": 53,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "#[flux::alias(type Size() = usize{v: pow2(v) && 1<=v })]",
+                  "highlight_start": 49,
+                  "highlight_end": 53
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `1 ≤ size`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to `size`, defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 16953,
+              "byte_end": 16957,
+              "line_start": 568,
+              "line_end": 568,
+              "column_start": 36,
+              "column_end": 40,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn count(tail: usize, head: usize, size: usize) -> usize {",
+                  "highlight_start": 36,
+                  "highlight_end": 40
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/vec_deque.rs:571:5\n    |\n571 |     wrap_index(head.wrapping_sub(tail), size)\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/vec_deque.rs:30:49\n    |\n30  | #[flux::alias(type Size() = usize{v: pow2(v) && 1<=v })]\n    |                                                 ^^^^\n    = note: constraint that could not be proven: `1 ≤ size`\nnote: try adding a refinement to `size`, defined here\n   --> src/vec_deque.rs:568:36\n    |\n568 | fn count(tail: usize, head: usize, size: usize) -> usize {\n    |                                    ^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 568,
+          "file": "src/vec_deque.rs",
+          "added_reft": "size: Size"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 571,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 30,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 568,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

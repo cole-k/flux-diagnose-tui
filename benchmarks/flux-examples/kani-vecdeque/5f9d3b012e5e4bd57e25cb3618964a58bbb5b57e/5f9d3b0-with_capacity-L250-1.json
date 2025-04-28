@@ -1,0 +1,153 @@
+{
+  "error_name": "5f9d3b0-with_capacity-L250-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 8497,
+          "byte_end": 8537,
+          "line_start": 250,
+          "line_end": 250,
+          "column_start": 9,
+          "column_end": 49,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        Self::with_capacity_in(capacity, Global)",
+              "highlight_start": 9,
+              "highlight_end": 49
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 9318,
+              "byte_end": 9344,
+              "line_start": 280,
+              "line_end": 280,
+              "column_start": 46,
+              "column_end": 72,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::sig(fn (capacity: {usize[@cap] | cap < MAXIMUM_ZST_CAPACITY}, alloc: A) -> VecDeque<T, A>{v: v.head == 0 && v.tail == 0 && cap <= v.cap})]",
+                  "highlight_start": 46,
+                  "highlight_end": 72
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `capacity < vec_deque::MAXIMUM_ZST_CAPACITY`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to `capacity`, defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 8455,
+              "byte_end": 8463,
+              "line_start": 249,
+              "line_end": 249,
+              "column_start": 26,
+              "column_end": 34,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    pub fn with_capacity(capacity: usize) -> VecDeque<T> {",
+                  "highlight_start": 26,
+                  "highlight_end": 34
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/vec_deque.rs:250:9\n    |\n250 |         Self::with_capacity_in(capacity, Global)\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/vec_deque.rs:280:46\n    |\n280 |     #[flux::sig(fn (capacity: {usize[@cap] | cap < MAXIMUM_ZST_CAPACITY}, alloc: A) -> VecDeque<T, A>{v: v.head == 0 && v.tail == 0 && cap <= v.cap})]\n    |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = note: constraint that could not be proven: `capacity < vec_deque::MAXIMUM_ZST_CAPACITY`\nnote: try adding a refinement to `capacity`, defined here\n   --> src/vec_deque.rs:249:26\n    |\n249 |     pub fn with_capacity(capacity: usize) -> VecDeque<T> {\n    |                          ^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 249,
+          "file": "src/vec_deque.rs",
+          "added_reft": "capacity: {v: v < MAXIMUM_ZST_CAPACITY}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 250,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 280,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 249,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "error_name": "9997a44-handle_capacity_increase-L205-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "arithmetic operation may overflow",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 7095,
+          "byte_end": 7114,
+          "line_start": 205,
+          "line_end": 205,
+          "column_start": 58,
+          "column_end": 77,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "                self.copy_nonoverlapping(new_tail, tail, old_capacity - tail); // FLUX-PANIC: self.tail -> tail",
+              "highlight_start": 58,
+              "highlight_end": 77
+            }
+          ],
+          "label": null,
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "constraint that could not be proven: `old_capacity - s.tail ≥ 0`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to `old_capacity`, defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 5915,
+              "byte_end": 5927,
+              "line_start": 172,
+              "line_end": 172,
+              "column_start": 51,
+              "column_end": 63,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    unsafe fn handle_capacity_increase(&mut self, old_capacity: usize) {",
+                  "highlight_start": 51,
+                  "highlight_end": 63
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: arithmetic operation may overflow\n   --> src/vec_deque.rs:205:58\n    |\n205 |                 self.copy_nonoverlapping(new_tail, tail, old_capacity - tail); // FLUX-PANIC: self.tail -> tail\n    |                                                          ^^^^^^^^^^^^^^^^^^^\n    |\n    = note: constraint that could not be proven: `old_capacity - s.tail ≥ 0`\nnote: try adding a refinement to `old_capacity`, defined here\n   --> src/vec_deque.rs:172:51\n    |\n172 |     unsafe fn handle_capacity_increase(&mut self, old_capacity: usize) {\n    |                                                   ^^^^^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 172,
+          "file": "src/vec_deque.rs",
+          "added_reft": "old_capacity: {v: v > s.tail}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 205,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 172,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

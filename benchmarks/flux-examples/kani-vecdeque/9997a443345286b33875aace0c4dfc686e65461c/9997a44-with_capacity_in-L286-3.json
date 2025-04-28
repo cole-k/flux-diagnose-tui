@@ -1,0 +1,223 @@
+{
+  "error_name": "9997a44-with_capacity_in-L286-3",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 9537,
+          "byte_end": 9654,
+          "line_start": 286,
+          "line_end": 290,
+          "column_start": 9,
+          "column_end": 10,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        VecDeque {",
+              "highlight_start": 9,
+              "highlight_end": 19
+            },
+            {
+              "text": "            tail: 0,",
+              "highlight_start": 1,
+              "highlight_end": 21
+            },
+            {
+              "text": "            head: 0,",
+              "highlight_start": 1,
+              "highlight_end": 21
+            },
+            {
+              "text": "            buf: RawVec::with_capacity_in(cap, alloc),",
+              "highlight_start": 1,
+              "highlight_end": 55
+            },
+            {
+              "text": "        }",
+              "highlight_start": 1,
+              "highlight_end": 10
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 2905,
+              "byte_end": 2914,
+              "line_start": 77,
+              "line_end": 77,
+              "column_start": 41,
+              "column_end": 50,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::field({ RawVec<T, A>[cap] | pow2(cap) && 1 <= cap } )]",
+                  "highlight_start": 41,
+                  "highlight_end": 50
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `pow2(cap)`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `vec_deque::real_capacity`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 18100,
+              "byte_end": 18113,
+              "line_start": 601,
+              "line_end": 601,
+              "column_start": 4,
+              "column_end": 17,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn real_capacity(capacity: usize) -> usize {",
+                  "highlight_start": 4,
+                  "highlight_end": 17
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`cap` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 9503,
+              "byte_end": 9526,
+              "line_start": 284,
+              "line_end": 284,
+              "column_start": 19,
+              "column_end": 42,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        let cap = real_capacity(capacity);",
+                  "highlight_start": 19,
+                  "highlight_end": 42
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/vec_deque.rs:286:9\n    |\n286 | /         VecDeque {\n287 | |             tail: 0,\n288 | |             head: 0,\n289 | |             buf: RawVec::with_capacity_in(cap, alloc),\n290 | |         }\n    | |_________^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/vec_deque.rs:77:41\n    |\n77  |     #[flux::field({ RawVec<T, A>[cap] | pow2(cap) && 1 <= cap } )]\n    |                                         ^^^^^^^^^\n    = note: constraint that could not be proven: `pow2(cap)`\nnote: try adding a refinement to the function `vec_deque::real_capacity`\n   --> src/vec_deque.rs:601:4\n    |\n601 | fn real_capacity(capacity: usize) -> usize {\n    |    ^^^^^^^^^^^^^\nnote: `cap` defined here\n   --> src/vec_deque.rs:284:19\n    |\n284 |         let cap = real_capacity(capacity);\n    |                   ^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 601,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output: Size"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 286,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 287,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 288,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 289,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 290,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 77,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 601,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 284,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

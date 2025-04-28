@@ -1,0 +1,265 @@
+{
+  "error_name": "9997a44-handle_capacity_increase-L189-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "type invariant may not hold (when place is folded)",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 6484,
+          "byte_end": 7257,
+          "line_start": 189,
+          "line_end": 209,
+          "column_start": 9,
+          "column_end": 10,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        if self.tail <= self.head {",
+              "highlight_start": 9,
+              "highlight_end": 36
+            },
+            {
+              "text": "            // A",
+              "highlight_start": 1,
+              "highlight_end": 17
+            },
+            {
+              "text": "            // Nop",
+              "highlight_start": 1,
+              "highlight_end": 19
+            },
+            {
+              "text": "        } else if self.head < old_capacity - self.tail {",
+              "highlight_start": 1,
+              "highlight_end": 57
+            },
+            {
+              "text": "            // B",
+              "highlight_start": 1,
+              "highlight_end": 17
+            },
+            {
+              "text": "            unsafe {",
+              "highlight_start": 1,
+              "highlight_end": 21
+            },
+            {
+              "text": "                let head = self.head;",
+              "highlight_start": 1,
+              "highlight_end": 38
+            },
+            {
+              "text": "                self.copy_nonoverlapping(old_capacity, 0, head); // FLUX-PANIC: self.head -> head",
+              "highlight_start": 1,
+              "highlight_end": 98
+            },
+            {
+              "text": "            }",
+              "highlight_start": 1,
+              "highlight_end": 14
+            },
+            {
+              "text": "            self.head += old_capacity;",
+              "highlight_start": 1,
+              "highlight_end": 39
+            },
+            {
+              "text": "            debug_assert!(self.head > self.tail);",
+              "highlight_start": 1,
+              "highlight_end": 50
+            },
+            {
+              "text": "        } else {",
+              "highlight_start": 1,
+              "highlight_end": 17
+            },
+            {
+              "text": "            // C",
+              "highlight_start": 1,
+              "highlight_end": 17
+            },
+            {
+              "text": "            let new_tail = new_capacity - (old_capacity - self.tail);",
+              "highlight_start": 1,
+              "highlight_end": 70
+            },
+            {
+              "text": "            {",
+              "highlight_start": 1,
+              "highlight_end": 14
+            },
+            {
+              "text": "                let tail = self.tail;",
+              "highlight_start": 1,
+              "highlight_end": 38
+            },
+            {
+              "text": "                self.copy_nonoverlapping(new_tail, tail, old_capacity - tail); // FLUX-PANIC: self.tail -> tail",
+              "highlight_start": 1,
+              "highlight_end": 112
+            },
+            {
+              "text": "            }",
+              "highlight_start": 1,
+              "highlight_end": 14
+            },
+            {
+              "text": "            self.tail = new_tail;",
+              "highlight_start": 1,
+              "highlight_end": 34
+            },
+            {
+              "text": "            debug_assert!(self.head < self.tail);",
+              "highlight_start": 1,
+              "highlight_end": 50
+            },
+            {
+              "text": "        }",
+              "highlight_start": 1,
+              "highlight_end": 10
+            }
+          ],
+          "label": null,
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "constraint that could not be proven: `a2 < s.cap`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: type invariant may not hold (when place is folded)\n   --> src/vec_deque.rs:189:9\n    |\n189 | /         if self.tail <= self.head {\n190 | |             // A\n191 | |             // Nop\n192 | |         } else if self.head < old_capacity - self.tail {\n...   |\n208 | |             debug_assert!(self.head < self.tail);\n209 | |         }\n    | |_________^\n    |\n    = note: constraint that could not be proven: `a2 < s.cap`\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 172,
+          "file": "src/vec_deque.rs",
+          "added_reft": "old_capacity: {v: v > s.tail}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 189,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 190,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 191,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 192,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 193,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 194,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 195,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 196,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 197,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 198,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 199,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 200,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 201,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 202,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 203,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 204,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 205,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 206,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 207,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 208,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 209,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

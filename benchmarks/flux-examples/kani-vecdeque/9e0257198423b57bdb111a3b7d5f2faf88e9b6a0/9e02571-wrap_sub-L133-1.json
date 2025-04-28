@@ -1,0 +1,187 @@
+{
+  "error_name": "9e02571-wrap_sub-L133-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 4390,
+          "byte_end": 4442,
+          "line_start": 133,
+          "line_end": 133,
+          "column_start": 9,
+          "column_end": 61,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        wrap_index(idx.wrapping_sub(subtrahend), self.cap())",
+              "highlight_start": 9,
+              "highlight_end": 61
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 1014,
+              "byte_end": 1021,
+              "line_start": 30,
+              "line_end": 30,
+              "column_start": 38,
+              "column_end": 45,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "#[flux::alias(type Size() = usize{v: pow2(v) && 1<=v })]",
+                  "highlight_start": 38,
+                  "highlight_end": 45
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `pow2(self.cap())`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `vec_deque::VecDeque::<T, A>::cap`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 3360,
+              "byte_end": 3363,
+              "line_start": 99,
+              "line_end": 99,
+              "column_start": 8,
+              "column_end": 11,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    fn cap(&self) -> usize {",
+                  "highlight_start": 8,
+                  "highlight_end": 11
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`self.cap()` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 4431,
+              "byte_end": 4441,
+              "line_start": 133,
+              "line_end": 133,
+              "column_start": 50,
+              "column_end": 60,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        wrap_index(idx.wrapping_sub(subtrahend), self.cap())",
+                  "highlight_start": 50,
+                  "highlight_end": 60
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/vec_deque.rs:133:9\n    |\n133 |         wrap_index(idx.wrapping_sub(subtrahend), self.cap())\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/vec_deque.rs:30:38\n    |\n30  | #[flux::alias(type Size() = usize{v: pow2(v) && 1<=v })]\n    |                                      ^^^^^^^\n    = note: constraint that could not be proven: `pow2(self.cap())`\nnote: try adding a refinement to the function `vec_deque::VecDeque::<T, A>::cap`\n   --> src/vec_deque.rs:99:8\n    |\n99  |     fn cap(&self) -> usize {\n    |        ^^^\nnote: `self.cap()` defined here\n   --> src/vec_deque.rs:133:50\n    |\n133 |         wrap_index(idx.wrapping_sub(subtrahend), self.cap())\n    |                                                  ^^^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 99,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output: Size"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 133,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 30,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 99,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 133,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

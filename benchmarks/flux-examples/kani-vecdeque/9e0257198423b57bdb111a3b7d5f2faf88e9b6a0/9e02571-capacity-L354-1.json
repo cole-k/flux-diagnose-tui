@@ -1,0 +1,153 @@
+{
+  "error_name": "9e02571-capacity-L354-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "arithmetic operation may overflow",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 11047,
+          "byte_end": 11061,
+          "line_start": 354,
+          "line_end": 354,
+          "column_start": 9,
+          "column_end": 23,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        self.cap() - 1",
+              "highlight_start": 9,
+              "highlight_end": 23
+            }
+          ],
+          "label": null,
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "constraint that could not be proven: `self.cap() - 1 ≥ 0`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `vec_deque::VecDeque::<T, A>::cap`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 3360,
+              "byte_end": 3363,
+              "line_start": 99,
+              "line_end": 99,
+              "column_start": 8,
+              "column_end": 11,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    fn cap(&self) -> usize {",
+                  "highlight_start": 8,
+                  "highlight_end": 11
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`self.cap()` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 11047,
+              "byte_end": 11057,
+              "line_start": 354,
+              "line_end": 354,
+              "column_start": 9,
+              "column_end": 19,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        self.cap() - 1",
+                  "highlight_start": 9,
+                  "highlight_end": 19
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: arithmetic operation may overflow\n   --> src/vec_deque.rs:354:9\n    |\n354 |         self.cap() - 1\n    |         ^^^^^^^^^^^^^^\n    |\n    = note: constraint that could not be proven: `self.cap() - 1 ≥ 0`\nnote: try adding a refinement to the function `vec_deque::VecDeque::<T, A>::cap`\n   --> src/vec_deque.rs:99:8\n    |\n99  |     fn cap(&self) -> usize {\n    |        ^^^\nnote: `self.cap()` defined here\n   --> src/vec_deque.rs:354:9\n    |\n354 |         self.cap() - 1\n    |         ^^^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 99,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output: {v: v >= 1}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 354,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 99,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 354,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

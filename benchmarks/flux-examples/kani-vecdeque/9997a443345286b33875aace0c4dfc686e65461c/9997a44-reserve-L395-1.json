@@ -1,0 +1,187 @@
+{
+  "error_name": "9997a44-reserve-L395-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 12691,
+          "byte_end": 12729,
+          "line_start": 395,
+          "line_end": 395,
+          "column_start": 17,
+          "column_end": 55,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "                self.handle_capacity_increase(old_cap);",
+              "highlight_start": 17,
+              "highlight_end": 55
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 5807,
+              "byte_end": 5821,
+              "line_start": 171,
+              "line_end": 171,
+              "column_start": 75,
+              "column_end": 89,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::sig(fn (self: &strg VecDeque<T,A>[@s], old_capacity: usize{v: v * 2 <= s.cap && 1 <= v}) ensures self: VecDeque<T, A>)]",
+                  "highlight_start": 75,
+                  "highlight_end": 89
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `old_cap * 2 ≤ a6.cap`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `vec_deque::VecDeque::<T, A>::cap`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 3460,
+              "byte_end": 3463,
+              "line_start": 101,
+              "line_end": 101,
+              "column_start": 8,
+              "column_end": 11,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    fn cap(&self) -> usize {",
+                  "highlight_start": 8,
+                  "highlight_end": 11
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`old_cap` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 12222,
+              "byte_end": 12232,
+              "line_start": 384,
+              "line_end": 384,
+              "column_start": 23,
+              "column_end": 33,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        let old_cap = self.cap();",
+                  "highlight_start": 23,
+                  "highlight_end": 33
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/vec_deque.rs:395:17\n    |\n395 |                 self.handle_capacity_increase(old_cap);\n    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/vec_deque.rs:171:75\n    |\n171 |     #[flux::sig(fn (self: &strg VecDeque<T,A>[@s], old_capacity: usize{v: v * 2 <= s.cap && 1 <= v}) ensures self: VecDeque<T, A>)]\n    |                                                                           ^^^^^^^^^^^^^^\n    = note: constraint that could not be proven: `old_cap * 2 ≤ a6.cap`\nnote: try adding a refinement to the function `vec_deque::VecDeque::<T, A>::cap`\n   --> src/vec_deque.rs:101:8\n    |\n101 |     fn cap(&self) -> usize {\n    |        ^^^\nnote: `old_cap` defined here\n   --> src/vec_deque.rs:384:23\n    |\n384 |         let old_cap = self.cap();\n    |                       ^^^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 605,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output: {v: 2 * old_cap <= v}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 395,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 171,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 101,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 384,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

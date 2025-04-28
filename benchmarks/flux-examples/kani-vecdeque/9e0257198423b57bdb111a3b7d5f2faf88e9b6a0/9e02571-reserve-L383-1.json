@@ -1,0 +1,226 @@
+{
+  "error_name": "9e02571-reserve-L383-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "arithmetic operation may overflow",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 12012,
+          "byte_end": 12030,
+          "line_start": 383,
+          "line_end": 383,
+          "column_start": 46,
+          "column_end": 64,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "            self.buf.reserve_exact(used_cap, new_cap - used_cap);",
+              "highlight_start": 46,
+              "highlight_end": 64
+            }
+          ],
+          "label": null,
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "constraint that could not be proven: `new_cap - self.len() + 1 ≥ 0`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `vec_deque::new_capacity`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 17421,
+              "byte_end": 17433,
+              "line_start": 590,
+              "line_end": 590,
+              "column_start": 4,
+              "column_end": 16,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn new_capacity(_old_cap: usize, used_cap: usize, additional: usize) -> usize {",
+                  "highlight_start": 4,
+                  "highlight_end": 16
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`new_cap` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 11754,
+              "byte_end": 11797,
+              "line_start": 377,
+              "line_end": 377,
+              "column_start": 23,
+              "column_end": 66,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        let new_cap = new_capacity(old_cap, used_cap, additional);",
+                  "highlight_start": 23,
+                  "highlight_end": 66
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`self.len()` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 11716,
+              "byte_end": 11726,
+              "line_start": 376,
+              "line_end": 376,
+              "column_start": 24,
+              "column_end": 34,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        let used_cap = self.len() + 1;",
+                  "highlight_start": 24,
+                  "highlight_end": 34
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "related function `vec_deque::VecDeque::<T, A>::len` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 12585,
+              "byte_end": 12588,
+              "line_start": 404,
+              "line_end": 404,
+              "column_start": 12,
+              "column_end": 15,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    pub fn len(&self) -> usize {",
+                  "highlight_start": 12,
+                  "highlight_end": 15
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: arithmetic operation may overflow\n   --> src/vec_deque.rs:383:46\n    |\n383 |             self.buf.reserve_exact(used_cap, new_cap - used_cap);\n    |                                              ^^^^^^^^^^^^^^^^^^\n    |\n    = note: constraint that could not be proven: `new_cap - self.len() + 1 ≥ 0`\nnote: try adding a refinement to the function `vec_deque::new_capacity`\n   --> src/vec_deque.rs:590:4\n    |\n590 | fn new_capacity(_old_cap: usize, used_cap: usize, additional: usize) -> usize {\n    |    ^^^^^^^^^^^^\nnote: `new_cap` defined here\n   --> src/vec_deque.rs:377:23\n    |\n377 |         let new_cap = new_capacity(old_cap, used_cap, additional);\n    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nnote: `self.len()` defined here\n   --> src/vec_deque.rs:376:24\n    |\n376 |         let used_cap = self.len() + 1;\n    |                        ^^^^^^^^^^\nnote: related function `vec_deque::VecDeque::<T, A>::len` defined here\n   --> src/vec_deque.rs:404:12\n    |\n404 |     pub fn len(&self) -> usize {\n    |            ^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 99,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output[self.cap]"
+        },
+        {
+          "line": 590,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output: {v: v >= used_cap}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 383,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 590,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 377,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 376,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 404,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

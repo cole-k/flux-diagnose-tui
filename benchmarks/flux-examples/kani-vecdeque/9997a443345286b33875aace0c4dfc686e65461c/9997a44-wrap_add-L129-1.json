@@ -1,0 +1,187 @@
+{
+  "error_name": "9997a44-wrap_add-L129-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/kani-vecdeque#vecdeque@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/kani-vecdeque/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "vecdeque",
+      "src_path": "/Users/cole/git/flux-examples/kani-vecdeque/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/vec_deque.rs",
+          "byte_start": 4338,
+          "byte_end": 4386,
+          "line_start": 129,
+          "line_end": 129,
+          "column_start": 9,
+          "column_end": 57,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        wrap_index(idx.wrapping_add(addend), self.cap())",
+              "highlight_start": 9,
+              "highlight_end": 57
+            }
+          ],
+          "label": "a postcondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 4256,
+              "byte_end": 4265,
+              "line_start": 127,
+              "line_end": 127,
+              "column_start": 86,
+              "column_end": 95,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::sig(fn (self: &VecDeque<T,A>[@s], idx: usize, addend: usize) -> usize{v: v < s.cap})]",
+                  "highlight_start": 86,
+                  "highlight_end": 95
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `wrap_index(idx.wrapping_add(addend), self.cap()) < s.cap`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `vec_deque::wrap_index`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 17390,
+              "byte_end": 17400,
+              "line_start": 572,
+              "line_end": 572,
+              "column_start": 4,
+              "column_end": 14,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn wrap_index(index: usize, size: Size) -> usize {",
+                  "highlight_start": 4,
+                  "highlight_end": 14
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`wrap_index(idx.wrapping_add(addend), self.cap())` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/vec_deque.rs",
+              "byte_start": 4338,
+              "byte_end": 4386,
+              "line_start": 129,
+              "line_end": 129,
+              "column_start": 9,
+              "column_end": 57,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        wrap_index(idx.wrapping_add(addend), self.cap())",
+                  "highlight_start": 9,
+                  "highlight_end": 57
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/vec_deque.rs:129:9\n    |\n129 |         wrap_index(idx.wrapping_add(addend), self.cap())\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a postcondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/vec_deque.rs:127:86\n    |\n127 |     #[flux::sig(fn (self: &VecDeque<T,A>[@s], idx: usize, addend: usize) -> usize{v: v < s.cap})]\n    |                                                                                      ^^^^^^^^^\n    = note: constraint that could not be proven: `wrap_index(idx.wrapping_add(addend), self.cap()) < s.cap`\nnote: try adding a refinement to the function `vec_deque::wrap_index`\n   --> src/vec_deque.rs:572:4\n    |\n572 | fn wrap_index(index: usize, size: Size) -> usize {\n    |    ^^^^^^^^^^\nnote: `wrap_index(idx.wrapping_add(addend), self.cap())` defined here\n   --> src/vec_deque.rs:129:9\n    |\n129 |         wrap_index(idx.wrapping_add(addend), self.cap())\n    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 572,
+          "file": "src/vec_deque.rs",
+          "added_reft": "output: {v: v < size}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 129,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 127,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 572,
+      "file": "src/vec_deque.rs"
+    },
+    {
+      "line": 129,
+      "file": "src/vec_deque.rs"
+    }
+  ]
+}

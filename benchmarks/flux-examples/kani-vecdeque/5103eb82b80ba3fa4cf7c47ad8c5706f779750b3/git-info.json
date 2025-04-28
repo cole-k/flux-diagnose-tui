@@ -1,0 +1,10 @@
+{
+  "repo_name": "flux-examples",
+  "commit": "5103eb82b80ba3fa4cf7c47ad8c5706f779750b3",
+  "remote": {
+    "remote_name": "develop",
+    "remote_url": "https://github.com/cole-k/flux-examples.git"
+  },
+  "branch": "reverify-vecdeque-with-better-errors",
+  "subdir": "kani-vecdeque"
+}
