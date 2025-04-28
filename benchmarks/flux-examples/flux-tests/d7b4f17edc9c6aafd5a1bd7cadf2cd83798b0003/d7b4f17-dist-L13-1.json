@@ -1,0 +1,153 @@
+{
+  "error_name": "d7b4f17-dist-L13-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/flux-tests#fluxtests@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/flux-tests/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "fluxtests",
+      "src_path": "/Users/cole/git/flux-examples/flux-tests/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/kmeans.rs",
+          "byte_start": 345,
+          "byte_end": 348,
+          "line_start": 13,
+          "line_end": 13,
+          "column_start": 26,
+          "column_end": 29,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        let di = x[i] - y[i];",
+              "highlight_start": 26,
+              "highlight_end": 29
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/rvec.rs",
+              "byte_start": 4140,
+              "byte_end": 4145,
+              "line_start": 181,
+              "line_end": 181,
+              "column_start": 44,
+              "column_end": 49,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::sig(fn(&RVec<T>[@n], usize{v : v < n}) -> &T)]",
+                  "highlight_start": 44,
+                  "highlight_end": 49
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `a2 < y.len`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to `y`, defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/kmeans.rs",
+              "byte_start": 230,
+              "byte_end": 231,
+              "line_start": 9,
+              "line_end": 9,
+              "column_start": 24,
+              "column_end": 25,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn dist(x: &RVec<f32>, y: &RVec<f32>) -> f32 {",
+                  "highlight_start": 24,
+                  "highlight_end": 25
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/kmeans.rs:13:26\n    |\n13  |         let di = x[i] - y[i];\n    |                          ^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/rvec.rs:181:44\n    |\n181 |     #[flux::sig(fn(&RVec<T>[@n], usize{v : v < n}) -> &T)]\n    |                                            ^^^^^\n    = note: constraint that could not be proven: `a2 < y.len`\nnote: try adding a refinement to `y`, defined here\n   --> src/kmeans.rs:9:24\n    |\n9   | fn dist(x: &RVec<f32>, y: &RVec<f32>) -> f32 {\n    |                        ^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 9,
+          "file": "src/kmeans.rs",
+          "added_reft": "x: &RVec<f32>[@n], y: &RVec<f32>[@n]"
+        }
+      ],
+      "note": "Need to add refinements to both x and y"
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 13,
+      "file": "src/kmeans.rs"
+    },
+    {
+      "line": 181,
+      "file": "src/rvec.rs"
+    },
+    {
+      "line": 9,
+      "file": "src/kmeans.rs"
+    }
+  ]
+}

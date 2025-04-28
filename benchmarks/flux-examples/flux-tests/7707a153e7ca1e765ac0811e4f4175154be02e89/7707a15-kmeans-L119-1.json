@@ -1,0 +1,119 @@
+{
+  "error_name": "7707a15-kmeans-L119-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/flux-tests#fluxtests@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/flux-tests/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "fluxtests",
+      "src_path": "/Users/cole/git/flux-examples/flux-tests/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/kmeans.rs",
+          "byte_start": 2955,
+          "byte_end": 2978,
+          "line_start": 119,
+          "line_end": 119,
+          "column_start": 15,
+          "column_end": 38,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        res = kmeans_step(n, res, ps);",
+              "highlight_start": 15,
+              "highlight_end": 38
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/kmeans.rs",
+              "byte_start": 2165,
+              "byte_end": 2170,
+              "line_start": 91,
+              "line_end": 91,
+              "column_start": 12,
+              "column_end": 17,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "  requires k > 0",
+                  "highlight_start": 12,
+                  "highlight_end": 17
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `k > RVec { len: 0 }`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/kmeans.rs:119:15\n    |\n119 |         res = kmeans_step(n, res, ps);\n    |               ^^^^^^^^^^^^^^^^^^^^^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/kmeans.rs:91:12\n    |\n91  |   requires k > 0\n    |            ^^^^^\n    = note: constraint that could not be proven: `k > RVec { len: 0 }`\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 115,
+          "file": "src/kmeans.rs",
+          "added_reft": "cs: {RVec<RVec<f32>[n]>[@k] | k > 0}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 119,
+      "file": "src/kmeans.rs"
+    },
+    {
+      "line": 91,
+      "file": "src/kmeans.rs"
+    }
+  ]
+}

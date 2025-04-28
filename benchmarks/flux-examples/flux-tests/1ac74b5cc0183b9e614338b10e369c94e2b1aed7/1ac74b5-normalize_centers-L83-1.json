@@ -1,0 +1,119 @@
+{
+  "error_name": "1ac74b5-normalize_centers-L83-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/flux-tests#fluxtests@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/flux-tests/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "fluxtests",
+      "src_path": "/Users/cole/git/flux-examples/flux-tests/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/kmeans.rs",
+          "byte_start": 2003,
+          "byte_end": 2006,
+          "line_start": 83,
+          "line_end": 83,
+          "column_start": 23,
+          "column_end": 26,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        normal(&mut cs[i], weights[i]);",
+              "highlight_start": 23,
+              "highlight_end": 26
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/rvec.rs",
+              "byte_start": 4352,
+              "byte_end": 4357,
+              "line_start": 189,
+              "line_end": 189,
+              "column_start": 48,
+              "column_end": 53,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::sig(fn(&mut RVec<T>[@n], usize{v : v < n}) -> &mut T)]",
+                  "highlight_start": 48,
+                  "highlight_end": 53
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `a3 < a4.len`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/kmeans.rs:83:23\n    |\n83  |         normal(&mut cs[i], weights[i]);\n    |                       ^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/rvec.rs:189:48\n    |\n189 |     #[flux::sig(fn(&mut RVec<T>[@n], usize{v : v < n}) -> &mut T)]\n    |                                                ^^^^^\n    = note: constraint that could not be proven: `a3 < a4.len`\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 79,
+          "file": "src/kmeans.rs",
+          "added_reft": "cs: &mut RVec<RVec<f32>>[@k], weights: &RVec<usize>[k]"
+        }
+      ],
+      "note": "need refts for cs and weights to have same size"
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 83,
+      "file": "src/kmeans.rs"
+    },
+    {
+      "line": 189,
+      "file": "src/rvec.rs"
+    }
+  ]
+}

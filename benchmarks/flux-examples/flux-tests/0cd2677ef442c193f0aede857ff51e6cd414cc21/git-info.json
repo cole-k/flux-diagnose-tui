@@ -1,0 +1,10 @@
+{
+  "repo_name": "flux-examples",
+  "commit": "0cd2677ef442c193f0aede857ff51e6cd414cc21",
+  "remote": {
+    "remote_name": "develop",
+    "remote_url": "https://github.com/cole-k/flux-examples.git"
+  },
+  "branch": "detached@0cd2677",
+  "subdir": "flux-tests"
+}

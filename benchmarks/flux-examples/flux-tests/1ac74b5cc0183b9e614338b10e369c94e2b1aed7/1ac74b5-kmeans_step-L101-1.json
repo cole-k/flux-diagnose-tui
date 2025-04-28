@@ -1,0 +1,221 @@
+{
+  "error_name": "1ac74b5-kmeans_step-L101-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-examples/flux-tests#fluxtests@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-examples/flux-tests/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "fluxtests",
+      "src_path": "/Users/cole/git/flux-examples/flux-tests/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/kmeans.rs",
+          "byte_start": 2499,
+          "byte_end": 2502,
+          "line_start": 101,
+          "line_end": 101,
+          "column_start": 28,
+          "column_end": 31,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        add(&mut res_points[j], &ps[i]);",
+              "highlight_start": 28,
+              "highlight_end": 31
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/rvec.rs",
+              "byte_start": 4352,
+              "byte_end": 4357,
+              "line_start": 189,
+              "line_end": 189,
+              "column_start": 48,
+              "column_end": 53,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux::sig(fn(&mut RVec<T>[@n], usize{v : v < n}) -> &mut T)]",
+                  "highlight_start": 48,
+                  "highlight_end": 53
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `j < cs.len`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "try adding a refinement to the function `kmeans::nearest`",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/kmeans.rs",
+              "byte_start": 1419,
+              "byte_end": 1426,
+              "line_start": 61,
+              "line_end": 61,
+              "column_start": 4,
+              "column_end": 11,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn nearest(p: &RVec<f32>, cs: &RVec<RVec<f32>>) -> usize {",
+                  "highlight_start": 4,
+                  "highlight_end": 11
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`j` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/kmeans.rs",
+              "byte_start": 2450,
+              "byte_end": 2470,
+              "line_start": 100,
+              "line_end": 100,
+              "column_start": 17,
+              "column_end": 37,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "        let j = nearest(&ps[i], &cs);",
+                  "highlight_start": 17,
+                  "highlight_end": 37
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "`cs` defined here",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/kmeans.rs",
+              "byte_start": 2208,
+              "byte_end": 2210,
+              "line_start": 91,
+              "line_end": 91,
+              "column_start": 26,
+              "column_end": 28,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "fn kmeans_step(n: usize, cs: RVec<RVec<f32>>, ps: &RVec<RVec<f32>>) -> RVec<RVec<f32>> {",
+                  "highlight_start": 26,
+                  "highlight_end": 28
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/kmeans.rs:101:28\n    |\n101 |         add(&mut res_points[j], &ps[i]);\n    |                            ^^^ a precondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/rvec.rs:189:48\n    |\n189 |     #[flux::sig(fn(&mut RVec<T>[@n], usize{v : v < n}) -> &mut T)]\n    |                                                ^^^^^\n    = note: constraint that could not be proven: `j < cs.len`\nnote: try adding a refinement to the function `kmeans::nearest`\n   --> src/kmeans.rs:61:4\n    |\n61  | fn nearest(p: &RVec<f32>, cs: &RVec<RVec<f32>>) -> usize {\n    |    ^^^^^^^\nnote: `j` defined here\n   --> src/kmeans.rs:100:17\n    |\n100 |         let j = nearest(&ps[i], &cs);\n    |                 ^^^^^^^^^^^^^^^^^^^^\nnote: `cs` defined here\n   --> src/kmeans.rs:91:26\n    |\n91  | fn kmeans_step(n: usize, cs: RVec<RVec<f32>>, ps: &RVec<RVec<f32>>) -> RVec<RVec<f32>> {\n    |                          ^^\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 61,
+          "file": "src/kmeans.rs",
+          "added_reft": "p: &RVec<f32>, cs: &RVec<RVec<f32>>[@k], output: {v: v < k}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 101,
+      "file": "src/kmeans.rs"
+    },
+    {
+      "line": 189,
+      "file": "src/rvec.rs"
+    },
+    {
+      "line": 61,
+      "file": "src/kmeans.rs"
+    },
+    {
+      "line": 100,
+      "file": "src/kmeans.rs"
+    },
+    {
+      "line": 91,
+      "file": "src/kmeans.rs"
+    }
+  ]
+}
