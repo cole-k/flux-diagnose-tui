@@ -189,7 +189,7 @@ impl<'a> CachedRepository<'a> {
         // This parameter is only for determining whether to _save_ to a cache.
         //
         if use_cache {
-            let worktree_path = self.calculate_remote_cached_worktree_path(&remote.remote_url, commit_hash)?.canonicalize()?;
+            let worktree_path = self.calculate_remote_cached_worktree_path(&remote.remote_url, commit_hash)?;
             self.create_or_get_cached_worktree(&cached_repo_path, &worktree_path, commit_hash)
                 .with_context(|| format!("Failed to get/create cached worktree for remote commit {}", commit_hash))
         } else {
@@ -465,6 +465,7 @@ impl<'a> CachedRepository<'a> {
         let (safe_host, safe_path) = self.sanitize_url_for_path(remote_url)?;
         Ok(self
             .cache_root
+            .canonicalize()?
             .join("repos") // Store bare clones under 'repos'
             .join(safe_host)
             .join(safe_path))
@@ -478,6 +479,7 @@ impl<'a> CachedRepository<'a> {
 
         Ok(self
             .cache_root
+            .canonicalize()?
             .join("worktrees") // Store worktrees under 'worktrees'
             .join("remote")    // Subdir for remote-derived worktrees
             .join(safe_host)
