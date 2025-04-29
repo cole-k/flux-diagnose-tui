@@ -60,8 +60,11 @@ pub struct ConstraintDebugInfoDeserialize { // Made pub as it's returned
 #[derive(Debug, Clone)]
 pub struct FixEvalResult {
     pub num_correct_lines: usize,
-    pub num_total_lines: usize,
+    pub num_correct_lines_all_binders: usize,
     pub missing_lines: Vec<LineLoc>, // Contains the expected lines not found in blame spans
+    pub missing_lines_all_binders: Vec<LineLoc>, // Contains the expected lines not found in blame spans
+    pub num_total_lines: usize,
+    pub is_trivial: Option<bool>,
 }
 
 impl FixEvalResult {
@@ -163,6 +166,16 @@ pub fn extract_constraint_debug_info(
     Ok(None)
 }
 
+fn in_fix_line(blame_span: &SimpleSpanDeserialize, fix_line: &FixLine) -> bool {
+    // FixLines are relative, just like the blame span paths.
+    let fix_line_path_str = fix_line.file.to_string_lossy().to_string();
+    // Compare file paths (string comparison - may be fragile)
+    blame_span.start.file == fix_line_path_str
+    // Is the line contained in the blame span?
+        && fix_line.line >= blame_span.start.line
+        && fix_line.line <= blame_span.end.line
+}
+
 /// Evaluates each `Fix` in `error_and_fixes` against the `blame_spans` in `constraint_info`.
 ///
 /// It checks if the line number of each `FixLine` is contained within any `BlameSpan`'s
@@ -188,41 +201,53 @@ pub fn evaluate_error(
         let num_total_lines = fix.fix_lines.len();
         let mut num_correct_lines = 0;
         let mut missing_lines = Vec::new();
+        let mut num_correct_lines_all_binders = 0;
+        let mut missing_lines_all_binders = Vec::new();
 
         for fix_line in &fix.fix_lines {
-            let mut found_match = false;
-
-            // FixLines are relative, just like the blame span paths.
-            let fix_line_path_str = fix_line.file.to_string_lossy().to_string();
-
-
-            for blame_span_info in &constraint_info.blame_spans {
+            let match_in_blame_spans = constraint_info.blame_spans.iter().any(|blame_span_info| {
                 if let Some(blame_span) = &blame_span_info.blame_span {
-                    // Compare file paths (string comparison - may be fragile)
-                    if blame_span.start.file == fix_line_path_str {
-                        // Check if the fix line number is within the blame span's line range
-                        if fix_line.line >= blame_span.start.line
-                            && fix_line.line <= blame_span.end.line
-                        {
-                            found_match = true;
-                            break; // Found a matching blame span for this fix_line
-                        }
+                    in_fix_line(&blame_span, fix_line)
+                } else {
+                    false
+                }
+            });
+
+            let match_in_all_binders = constraint_info.binders.iter().any(|binder_info| {
+                if let Some(span) = &binder_info.span {
+                    if in_fix_line(span, fix_line) {
+                        return true;
                     }
                 }
-            }
+                if let Some(SimpleFnInfoDeserialize {fn_span: Some(span), ..}) = &binder_info.related_function {
+                    if in_fix_line(span, fix_line) {
+                        return true;
+                    }
+                }
+                false
+            });
 
-            if found_match {
+            if match_in_blame_spans {
                 num_correct_lines += 1;
             } else {
                  // Construct LineLoc relative to the base path if provided for reporting
                 missing_lines.push(LineLoc::new(fix_line.line, fix_line.file.clone()));
             }
+
+            if match_in_all_binders {
+                num_correct_lines_all_binders += 1;
+            } else {
+                missing_lines_all_binders.push(LineLoc::new(fix_line.line, fix_line.file.clone()));
+            }
         }
 
         fix_evals.push(FixEvalResult {
             num_correct_lines,
-            num_total_lines,
+            num_correct_lines_all_binders,
             missing_lines,
+            missing_lines_all_binders,
+            num_total_lines,
+            is_trivial: fix.is_trivial,
         });
     }
 
