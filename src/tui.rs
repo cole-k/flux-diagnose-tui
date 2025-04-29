@@ -81,6 +81,7 @@ pub struct AppState {
     editing_line: Option<usize>, // Track which line (1-based) is being edited
     file_explorer: FileExplorer,
     confirmation: Option<ConfirmationState>,
+    has_trivial_fix: Option<bool>,
 }
 
 impl AppState {
@@ -124,7 +125,7 @@ impl AppState {
         // NOTE: We only will show the first fix: callers must pass
         // an ErrorAndFixes that has 1 or fewer fix in it or risk
         // fixes getting swallowed.
-        let (fix_lines, note) = if let Some(fix) = error_and_fixes.fixes.first() {
+        let (fix_lines, note, has_trivial_fix) = if let Some(fix) = error_and_fixes.fixes.first() {
             let fix_lines = fix.fix_lines
                 .iter()
                 .map(|fix_line| {
@@ -135,9 +136,9 @@ impl AppState {
                     )
                 })
                 .collect();
-            (fix_lines, fix.note.clone())
+            (fix_lines, fix.note.clone(), fix.is_trivial)
         } else {
-            (BTreeMap::new(), None)
+            (BTreeMap::new(), None, None)
         };
 
         let mut state = Self {
@@ -159,6 +160,7 @@ impl AppState {
             editing_line: None,
             file_explorer,
             confirmation: None,
+            has_trivial_fix,
         };
 
         state.next_error()?;
@@ -385,6 +387,7 @@ impl AppState {
         Ok(Fix {
             fix_lines,
             note: self.note.clone(),
+            is_trivial: self.has_trivial_fix,
         })
     }
 }
@@ -457,6 +460,15 @@ fn handle_browsing_input(
                         if confirmed {
                             app_state.exit_intent = Some(ExitIntent::Skip);
                         }
+                        Ok(())
+                    },
+                ),
+                KeyCode::Char('t') => app_state.request_confirmation(
+                    "Does this error have a trivial fix?".to_string(),
+                    Some("i.e. can you successfully copy the failing refinement onto the fix lines?".to_string()),
+                    AppMode::Browsing,
+                    |app_state, has_trivial_fix| {
+                        app_state.has_trivial_fix = Some(has_trivial_fix);
                         Ok(())
                     },
                 ),

@@ -31,6 +31,9 @@ pub struct FixLine {
 pub struct Fix {
     pub fix_lines: Vec<FixLine>,
     pub note: Option<String>,
+    /// Would copying the refinement that can't be proven to
+    /// all of the fix_lines (eventually) work?
+    pub is_trivial: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
