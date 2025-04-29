@@ -122,6 +122,8 @@ impl FixEvalResult {
 pub struct ErrorEvalResult {
     pub error_name: String,
     pub fix_evals: Vec<FixEvalResult>, // One result per Fix in ErrorAndFixes
+    pub num_blamed: usize,
+    pub num_binders: usize,
 }
 
 impl ErrorEvalResult {
@@ -295,6 +297,8 @@ pub fn evaluate_error(
 
     ErrorEvalResult {
         error_name: error_and_fixes.error_name.clone(),
+        num_blamed: constraint_info.blame_spans.len(),
+        num_binders: constraint_info.binders.len(),
         fix_evals,
     }
 }
@@ -342,9 +346,11 @@ pub fn generate_summary_table(results: &[ErrorEvalResult]) -> String {
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
             "Error Name",
-            "Best Ratio\n(Std)",
+            "Best Ratio\n(Blamed)",
             "Best Ratio\n(All)", // Shortened "(All Binders)"
-            "Best Correct?\n(Std/All)",
+            "Num Blamed",
+            "Num Binders",
+            "All Correct?\n(Blamed/All)",
             "All Bad?\n(Std/All)",
             "Trivial?",
         ]);
@@ -386,13 +392,13 @@ pub fn generate_summary_table(results: &[ErrorEvalResult]) -> String {
 
         // Best Ratio (All)
         let ratio_all_str = match best_eval_all_opt {
-             Some(best_eval) => (
+             Some(best_eval) => {
                  if best_eval.num_total_lines == 0 {
                      "N/A (0)".to_string() // Indicate 0 lines expected
                  } else {
                      format!("{}/{}", best_eval.num_correct_lines_all_binders, best_eval.num_total_lines)
                  }
-             ),
+             }
              None => "N/A".to_string(), // No fixes evaluated
         };
 
@@ -400,6 +406,9 @@ pub fn generate_summary_table(results: &[ErrorEvalResult]) -> String {
         let best_correct_std = best_eval_std_opt.map_or(false, |eval| eval.is_fully_correct());
         let best_correct_all = best_eval_all_opt.map_or(false, |eval| eval.is_fully_correct_all_binders());
         let best_correct_pair_str = format_bool_pair(best_correct_std, best_correct_all);
+
+        let num_blamed_str = result.num_blamed.to_string();
+        let num_binders_str = result.num_binders.to_string();
 
         // All Bad? (Std/All)
         // Use the helper methods defined in ErrorEvalResult for clarity
@@ -412,6 +421,8 @@ pub fn generate_summary_table(results: &[ErrorEvalResult]) -> String {
             Cell::new(&result.error_name),
             Cell::new(&ratio_std_str).set_alignment(comfy_table::CellAlignment::Right),
             Cell::new(&ratio_all_str).set_alignment(comfy_table::CellAlignment::Right),
+            Cell::new(&num_blamed_str).set_alignment(comfy_table::CellAlignment::Right),
+            Cell::new(&num_binders_str).set_alignment(comfy_table::CellAlignment::Right),
             Cell::new(&best_correct_pair_str).set_alignment(comfy_table::CellAlignment::Center),
             Cell::new(&all_bad_pair_str).set_alignment(comfy_table::CellAlignment::Center),
             Cell::new(trivial_marker).set_alignment(comfy_table::CellAlignment::Center),
