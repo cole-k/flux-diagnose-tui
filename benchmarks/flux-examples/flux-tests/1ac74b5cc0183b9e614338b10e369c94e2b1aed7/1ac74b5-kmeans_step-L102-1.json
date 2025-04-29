@@ -193,7 +193,8 @@
           "added_reft": "p: &RVec<f32>, cs: &RVec<RVec<f32>>[@k], output: {v: v < k}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": false
     }
   ],
   "error_lines": [

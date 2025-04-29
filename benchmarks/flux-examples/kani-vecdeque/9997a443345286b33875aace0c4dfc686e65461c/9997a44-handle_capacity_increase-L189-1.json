@@ -173,7 +173,8 @@
           "added_reft": "old_capacity: {v: v > s.tail}"
         }
       ],
-      "note": null
+      "note": "unsure",
+      "is_trivial": null
     }
   ],
   "error_lines": [

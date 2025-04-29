@@ -133,7 +133,8 @@
           "added_reft": "self: {&RingBuffer<T>[@rb] | full(rb)}"
         }
       ],
-      "note": "annot should be bool[full(rb)], but to fix this buggy annotation the correct thing to do is refine self more"
+      "note": "annot should be bool[full(rb)], but to fix this buggy annotation the correct thing to do is refine self more",
+      "is_trivial": true
     }
   ],
   "error_lines": [

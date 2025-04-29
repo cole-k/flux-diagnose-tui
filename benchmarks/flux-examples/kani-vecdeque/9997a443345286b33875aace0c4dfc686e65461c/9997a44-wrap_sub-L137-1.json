@@ -163,7 +163,8 @@
           "added_reft": "output: {v: v < size}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     }
   ],
   "error_lines": [

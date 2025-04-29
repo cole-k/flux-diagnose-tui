@@ -103,7 +103,8 @@
           "added_reft": "cs: &mut RVec<RVec<f32>>[@k], weights: &RVec<usize>[k]"
         }
       ],
-      "note": "need refts for cs and weights to have same size"
+      "note": "need refts for cs and weights to have same size",
+      "is_trivial": false
     }
   ],
   "error_lines": [

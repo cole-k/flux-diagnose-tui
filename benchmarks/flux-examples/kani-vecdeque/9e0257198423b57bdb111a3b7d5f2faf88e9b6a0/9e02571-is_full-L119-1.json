@@ -198,7 +198,8 @@
           "added_reft": "output: {v: v <= self.cap}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": false
     }
   ],
   "error_lines": [

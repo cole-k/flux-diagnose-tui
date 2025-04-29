@@ -198,7 +198,8 @@
           "added_reft": "output: {v: v >= used_cap}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     }
   ],
   "error_lines": [

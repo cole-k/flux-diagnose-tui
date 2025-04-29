@@ -163,7 +163,8 @@
           "added_reft": "output: {v: 2 * old_cap <= v}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": false
     }
   ],
   "error_lines": [

@@ -123,7 +123,8 @@
           "added_reft": "ring: {&'a mut[T][@len] | len > 1}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     }
   ],
   "error_lines": [

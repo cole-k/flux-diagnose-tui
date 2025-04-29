@@ -168,7 +168,8 @@
           "added_reft": "trusted"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": false
     }
   ],
   "error_lines": [

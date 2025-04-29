@@ -103,7 +103,8 @@
           "added_reft": "old_capacity: {v: v >= self.tail}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     }
   ],
   "error_lines": [

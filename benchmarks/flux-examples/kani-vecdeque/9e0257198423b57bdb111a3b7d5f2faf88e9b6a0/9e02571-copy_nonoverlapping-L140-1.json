@@ -223,7 +223,8 @@
           "added_reft": "dst: {v: v + len <= self.cap}, src: {v: v + len <= self.cap}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     }
   ],
   "error_lines": [

@@ -133,7 +133,8 @@
           "added_reft": "size: Size"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     }
   ],
   "error_lines": [

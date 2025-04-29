@@ -183,7 +183,8 @@
           "added_reft": "output: {v: v > capacity}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     },
     {
       "fix_lines": [
@@ -193,7 +194,8 @@
           "added_reft": "capacity: {v: v > 0}"
         }
       ],
-      "note": "This alt fix restricts the API"
+      "note": "This alt fix restricts the API",
+      "is_trivial": true
     }
   ],
   "error_lines": [

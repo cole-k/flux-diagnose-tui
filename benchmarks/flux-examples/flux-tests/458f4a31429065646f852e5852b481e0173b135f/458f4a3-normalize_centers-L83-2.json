@@ -133,7 +133,8 @@
           "added_reft": "cs: &mut RVec<RVec<f32>>[@k], weights: &Rvec<usize>[k]"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": false
     }
   ],
   "error_lines": [

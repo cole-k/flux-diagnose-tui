@@ -103,7 +103,8 @@
           "added_reft": "cs: {&RVec<RVec<f32>>[@k] | k > 0}"
         }
       ],
-      "note": "k could be 0 and thus output would not be < k"
+      "note": "k could be 0 and thus output would not be < k",
+      "is_trivial": true
     }
   ],
   "error_lines": [

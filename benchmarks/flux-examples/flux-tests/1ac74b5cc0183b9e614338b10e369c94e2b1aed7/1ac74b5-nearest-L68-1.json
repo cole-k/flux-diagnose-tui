@@ -163,7 +163,8 @@
           "added_reft": "p: &RVec<f32>[@n], cs: &RVec<RVec<f32>[n]>"
         }
       ],
-      "note": "Need two refts to relate size"
+      "note": "Need two refts to relate size",
+      "is_trivial": false
     }
   ],
   "error_lines": [

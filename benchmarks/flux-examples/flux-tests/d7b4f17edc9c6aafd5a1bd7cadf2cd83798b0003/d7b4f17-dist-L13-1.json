@@ -133,7 +133,8 @@
           "added_reft": "x: &RVec<f32>[@n], y: &RVec<f32>[@n]"
         }
       ],
-      "note": "Need to add refinements to both x and y"
+      "note": "Need to add refinements to both x and y",
+      "is_trivial": false
     }
   ],
   "error_lines": [

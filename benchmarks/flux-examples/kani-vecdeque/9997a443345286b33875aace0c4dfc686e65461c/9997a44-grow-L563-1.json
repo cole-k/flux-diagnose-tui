@@ -163,7 +163,8 @@
           "added_reft": "Uncomment"
         }
       ],
-      "note": "Needs guidance via assert"
+      "note": "Needs guidance via assert",
+      "is_trivial": false
     }
   ],
   "error_lines": [

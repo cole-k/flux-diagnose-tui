@@ -133,7 +133,8 @@
           "added_reft": "n: usize, cs: RVec<RVec<f32>[n]>[@k], ps: RVec<RVec<f32>[n]>[k]"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": false
     }
   ],
   "error_lines": [

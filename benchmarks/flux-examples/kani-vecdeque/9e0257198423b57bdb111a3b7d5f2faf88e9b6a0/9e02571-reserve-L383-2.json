@@ -193,7 +193,8 @@
           "added_reft": "output: {v: pow2(v) && v >= used_cap && v >= old_cap}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": null
     }
   ],
   "error_lines": [

@@ -103,7 +103,8 @@
           "added_reft": "cs: {RVec<RVec<f32>[n]>[@k] | k > 0}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": true
     }
   ],
   "error_lines": [

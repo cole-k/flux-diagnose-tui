@@ -168,7 +168,8 @@
           "added_reft": "trusted"
         }
       ],
-      "note": "is_power_of_two needs to be trusted"
+      "note": "is_power_of_two needs to be trusted",
+      "is_trivial": false
     }
   ],
   "error_lines": [

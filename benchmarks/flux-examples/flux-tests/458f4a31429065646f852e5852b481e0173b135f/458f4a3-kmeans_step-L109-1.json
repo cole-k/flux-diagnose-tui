@@ -103,7 +103,8 @@
           "added_reft": "ensures cs: &mut RVec<RVec<f32>[n]>[@k]"
         }
       ],
-      "note": "Not sure about the issue"
+      "note": "Not sure about the issue",
+      "is_trivial": false
     }
   ],
   "error_lines": [

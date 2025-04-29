@@ -103,7 +103,8 @@
           "added_reft": "output: {bool[@b] | full(b)}"
         }
       ],
-      "note": null
+      "note": null,
+      "is_trivial": false
     }
   ],
   "error_lines": [
