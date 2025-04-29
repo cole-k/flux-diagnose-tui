@@ -124,8 +124,8 @@ impl AppState {
         // NOTE: We only will show the first fix: callers must pass
         // an ErrorAndFixes that has 1 or fewer fix in it or risk
         // fixes getting swallowed.
-        let fix_lines = if let Some(fix) = error_and_fixes.fixes.first() {
-            fix.fix_lines
+        let (fix_lines, note) = if let Some(fix) = error_and_fixes.fixes.first() {
+            let fix_lines = fix.fix_lines
                 .iter()
                 .map(|fix_line| {
                     let absolute_path = dir_path.join(&fix_line.file);
@@ -134,9 +134,10 @@ impl AppState {
                         fix_line.added_reft.clone(),
                     )
                 })
-                .collect()
+                .collect();
+            (fix_lines, fix.note.clone())
         } else {
-            BTreeMap::new()
+            (BTreeMap::new(), None)
         };
 
         let mut state = Self {
@@ -147,7 +148,7 @@ impl AppState {
             lines: vec![],
             error_lines: error_lines.clone(),
             fix_lines,
-            note: None,
+            note,
             current_line: 0,
             scroll_offset: 0,
             exit_intent: None,
@@ -461,6 +462,13 @@ fn handle_browsing_input(
                 ),
                 KeyCode::Char('z') | KeyCode::Char('n') => {
                     app_state.mode = AppMode::AddNote;
+                    // Populate the input field if a note is provided
+                    match &app_state.note {
+                        Some(note) => {
+                            app_state.input = Input::default().with_value(note.clone());
+                        }
+                        _ => {}
+                    }
                 }
                 // Navigation
                 KeyCode::Up | KeyCode::Char('k') => app_state.move_up(),
