@@ -1,0 +1,119 @@
+{
+  "error_name": "f49c635-enqueue-L113-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-ring-buffer/kernel#ringbuffer@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-ring-buffer/kernel/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "ringbuffer",
+      "src_path": "/Users/cole/git/flux-ring-buffer/kernel/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/collections/ring_buffer.rs",
+          "byte_start": 3670,
+          "byte_end": 3674,
+          "line_start": 113,
+          "line_end": 113,
+          "column_start": 13,
+          "column_end": 17,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "            true",
+              "highlight_start": 13,
+              "highlight_end": 17
+            }
+          ],
+          "label": "a postcondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/collections/ring_buffer.rs",
+              "byte_start": 3176,
+              "byte_end": 3191,
+              "line_start": 96,
+              "line_end": 96,
+              "column_start": 76,
+              "column_end": 91,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux_rs::sig(fn(self: &strg RingBuffer<T>[@old], val: T) -> bool{ b: b == !full(old) }",
+                  "highlight_start": 76,
+                  "highlight_end": 91
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `true = (old.hd ≠ (old.tl + 1) mod old.ring_len)`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n   --> src/collections/ring_buffer.rs:113:13\n    |\n113 |             true\n    |             ^^^^ a postcondition cannot be proved\n    |\nnote: this is the condition that cannot be proved\n   --> src/collections/ring_buffer.rs:96:76\n    |\n96  |     #[flux_rs::sig(fn(self: &strg RingBuffer<T>[@old], val: T) -> bool{ b: b == !full(old) }\n    |                                                                            ^^^^^^^^^^^^^^^\n    = note: constraint that could not be proven: `true = (old.hd ≠ (old.tl + 1) mod old.ring_len)`\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 80,
+          "file": "src/collections/ring_buffer.rs",
+          "added_reft": "output: {bool[@b] | full(b)}"
+        }
+      ],
+      "note": "Not sure"
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 113,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 96,
+      "file": "src/collections/ring_buffer.rs"
+    }
+  ]
+}

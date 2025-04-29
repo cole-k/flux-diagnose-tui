@@ -1,0 +1,153 @@
+{
+  "error_name": "c712616-is_full-L81-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-ring-buffer/kernel#ringbuffer@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-ring-buffer/kernel/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "ringbuffer",
+      "src_path": "/Users/cole/git/flux-ring-buffer/kernel/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/collections/ring_buffer.rs",
+          "byte_start": 2816,
+          "byte_end": 2864,
+          "line_start": 81,
+          "line_end": 81,
+          "column_start": 9,
+          "column_end": 57,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        self.head == ((self.tail + 1) % self.ring.len())",
+              "highlight_start": 9,
+              "highlight_end": 57
+            }
+          ],
+          "label": "a postcondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/collections/ring_buffer.rs",
+              "byte_start": 726,
+              "byte_end": 765,
+              "line_start": 23,
+              "line_end": 23,
+              "column_start": 39,
+              "column_end": 78,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    fn full(rb: RingBuffer) -> bool { rb.hd == next_index(rb.tl, rb.ring_len) }",
+                  "highlight_start": 39,
+                  "highlight_end": 78
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "inside this call",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/collections/ring_buffer.rs",
+              "byte_start": 2763,
+              "byte_end": 2771,
+              "line_start": 79,
+              "line_end": 79,
+              "column_start": 63,
+              "column_end": 71,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "    #[flux_rs::sig(fn(self: &RingBuffer<T>[@rb]) -> bool{ b : full(rb) })]",
+                  "highlight_start": 63,
+                  "highlight_end": 71
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `rb.hd = (rb.tl + 1) mod rb.ring_len`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n  --> src/collections/ring_buffer.rs:81:9\n   |\n81 |         self.head == ((self.tail + 1) % self.ring.len())\n   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ a postcondition cannot be proved\n   |\nnote: this is the condition that cannot be proved\n  --> src/collections/ring_buffer.rs:23:39\n   |\n23 |     fn full(rb: RingBuffer) -> bool { rb.hd == next_index(rb.tl, rb.ring_len) }\n   |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nnote: inside this call\n  --> src/collections/ring_buffer.rs:79:63\n   |\n79 |     #[flux_rs::sig(fn(self: &RingBuffer<T>[@rb]) -> bool{ b : full(rb) })]\n   |                                                               ^^^^^^^^\n   = note: constraint that could not be proven: `rb.hd = (rb.tl + 1) mod rb.ring_len`\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 80,
+          "file": "src/collections/ring_buffer.rs",
+          "added_reft": "self: {&RingBuffer<T>[@rb] | full(rb)}"
+        }
+      ],
+      "note": "annot should be bool[full(rb)], but to fix this buggy annotation the correct thing to do is refine self more"
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 81,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 23,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 79,
+      "file": "src/collections/ring_buffer.rs"
+    }
+  ]
+}

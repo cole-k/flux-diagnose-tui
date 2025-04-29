@@ -1,0 +1,10 @@
+{
+  "repo_name": "flux-ring-buffer",
+  "commit": "81bdde6228cbc5d8eda5fcb369ec6b2808c8285b",
+  "remote": {
+    "remote_name": "origin",
+    "remote_url": "https://github.com/cole-k/flux-ring-buffer.git"
+  },
+  "branch": "detached@81bdde6",
+  "subdir": "kernel"
+}

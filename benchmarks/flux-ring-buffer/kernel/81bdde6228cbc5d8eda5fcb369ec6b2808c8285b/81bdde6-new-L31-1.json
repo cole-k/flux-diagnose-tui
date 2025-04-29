@@ -1,0 +1,155 @@
+{
+  "error_name": "81bdde6-new-L31-1",
+  "error": {
+    "reason": "compiler-message",
+    "package_id": "path+file:///Users/cole/git/flux-ring-buffer/kernel#ringbuffer@0.1.0",
+    "manifest_path": "/Users/cole/git/flux-ring-buffer/kernel/Cargo.toml",
+    "target": {
+      "kind": [
+        "dylib",
+        "rlib"
+      ],
+      "crate_types": [
+        "dylib",
+        "rlib"
+      ],
+      "name": "ringbuffer",
+      "src_path": "/Users/cole/git/flux-ring-buffer/kernel/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "message": {
+      "message": "refinement type error",
+      "code": {
+        "code": "E0999",
+        "explanation": null
+      },
+      "level": "error",
+      "spans": [
+        {
+          "file_name": "src/collections/ring_buffer.rs",
+          "byte_start": 1027,
+          "byte_end": 1109,
+          "line_start": 31,
+          "line_end": 35,
+          "column_start": 9,
+          "column_end": 10,
+          "is_primary": true,
+          "text": [
+            {
+              "text": "        RingBuffer {",
+              "highlight_start": 9,
+              "highlight_end": 21
+            },
+            {
+              "text": "            head: 0,",
+              "highlight_start": 1,
+              "highlight_end": 21
+            },
+            {
+              "text": "            tail: 0,",
+              "highlight_start": 1,
+              "highlight_end": 21
+            },
+            {
+              "text": "            ring,",
+              "highlight_start": 1,
+              "highlight_end": 18
+            },
+            {
+              "text": "        }",
+              "highlight_start": 1,
+              "highlight_end": 10
+            }
+          ],
+          "label": "a precondition cannot be proved",
+          "suggested_replacement": null,
+          "suggestion_applicability": null
+        }
+      ],
+      "children": [
+        {
+          "message": "this is the condition that cannot be proved",
+          "code": null,
+          "level": "note",
+          "spans": [
+            {
+              "file_name": "src/collections/ring_buffer.rs",
+              "byte_start": 301,
+              "byte_end": 313,
+              "line_start": 10,
+              "line_end": 10,
+              "column_start": 22,
+              "column_end": 34,
+              "is_primary": true,
+              "text": [
+                {
+                  "text": "#[flux_rs::invariant(ring_len > 1)]",
+                  "highlight_start": 22,
+                  "highlight_end": 34
+                }
+              ],
+              "label": null,
+              "suggested_replacement": null,
+              "suggestion_applicability": null
+            }
+          ],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        },
+        {
+          "message": "constraint that could not be proven: `a0 > 1`",
+          "code": null,
+          "level": "note",
+          "spans": [],
+          "children": [],
+          "rendered": null,
+          "$message_type": null
+        }
+      ],
+      "rendered": "error[E0999]: refinement type error\n  --> src/collections/ring_buffer.rs:31:9\n   |\n31 | /         RingBuffer {\n32 | |             head: 0,\n33 | |             tail: 0,\n34 | |             ring,\n35 | |         }\n   | |_________^ a precondition cannot be proved\n   |\nnote: this is the condition that cannot be proved\n  --> src/collections/ring_buffer.rs:10:22\n   |\n10 | #[flux_rs::invariant(ring_len > 1)]\n   |                      ^^^^^^^^^^^^\n   = note: constraint that could not be proven: `a0 > 1`\n\n",
+      "$message_type": "diagnostic"
+    }
+  },
+  "fixes": [
+    {
+      "fix_lines": [
+        {
+          "line": 30,
+          "file": "src/collections/ring_buffer.rs",
+          "added_reft": "ring: {&'a mut[T][@len] | len > 1}"
+        }
+      ],
+      "note": null
+    }
+  ],
+  "error_lines": [
+    {
+      "line": 31,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 32,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 33,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 34,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 35,
+      "file": "src/collections/ring_buffer.rs"
+    },
+    {
+      "line": 10,
+      "file": "src/collections/ring_buffer.rs"
+    }
+  ]
+}
